@@ -1,0 +1,665 @@
+// File: src/app/StudySTEMLanding.tsx
+// Description: Single-file, production-ready React landing page for studySTEM (white + purple theme)
+
+import React, { useMemo, useRef, useState } from "react";
+import {
+  ArrowRight,
+  BookOpen,
+  Calculator,
+  FlaskConical,
+  Atom,
+  Binary,
+  Brain,
+  Check,
+  Star,
+  Users,
+  Clock,
+  ShieldCheck,
+  ChevronDown,
+} from "lucide-react";
+
+// Utility: simple classnames joiner
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+// Utility: focus ring style for a11y consistency
+const focusRing =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white";
+
+// Palette (Tailwind used directly; kept for centralizing rare inline styles)
+const brand = {
+  gradient: "bg-gradient-to-tr from-purple-700 via-purple-600 to-indigo-600",
+  textGrad:
+    "bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-600 bg-clip-text text-transparent",
+};
+
+export default function StudySTEMLanding() {
+  const sections = useMemo(
+    () => [
+      { id: "subjects", label: "Subjects" },
+      { id: "how", label: "How it Works" },
+      { id: "tutors", label: "Tutors" },
+      { id: "pricing", label: "Pricing" },
+      { id: "faq", label: "FAQ" },
+    ],
+    []
+  );
+
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const emailRef = useRef<HTMLInputElement>(null);
+
+  function handleJoinWaitlist(e: React.FormEvent) {
+    e.preventDefault();
+    const email = emailRef.current?.value?.trim();
+    if (!email) {
+      alert("Please enter your email to join the waitlist.");
+      return;
+    }
+    // Why: Demonstrate graceful UX before backend wiring.
+    alert(`Thanks! We'll reach out to ${email} shortly.`);
+    if (emailRef.current) emailRef.current.value = "";
+  }
+
+  function scrollToId(id: string) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  return (
+    <main className="min-h-screen bg-white text-gray-900 antialiased">
+      {/* Skip link for accessibility */}
+      <a
+        href="#main"
+        className={cx(
+          "sr-only focus:not-sr-only absolute left-3 top-3 z-50 rounded bg-white px-3 py-2 text-sm shadow",
+          focusRing
+        )}
+      >
+        Skip to content
+      </a>
+
+      {/* Header */}
+      <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <div className={cx("h-9 w-9 rounded-xl", brand.gradient)} />
+            <span className="text-lg font-bold tracking-tight">
+              <span className={brand.textGrad}>study</span>STEM
+            </span>
+          </div>
+          <nav aria-label="Primary" className="hidden gap-6 md:flex">
+            {sections.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => scrollToId(s.id)}
+                className={cx(
+                  "text-sm font-medium text-gray-700 hover:text-purple-700",
+                  focusRing
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
+          </nav>
+          <div className="hidden items-center gap-3 sm:flex">
+            <a
+              href="#pricing"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToId("pricing");
+              }}
+              className={cx(
+                "rounded-xl border border-purple-200 px-4 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-50",
+                focusRing
+              )}
+            >
+              View Pricing
+            </a>
+            <a
+              href="#join"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToId("join");
+              }}
+              className={cx(
+                brand.gradient,
+                "rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-95",
+                focusRing
+              )}
+            >
+              Get Started
+            </a>
+          </div>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section id="main" className="relative overflow-hidden">
+        <div className="absolute inset-0 -z-10 opacity-10 [background:radial-gradient(50%_50%_at_50%_0%,#7C3AED,transparent_60%)]" />
+        <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-4 py-16 sm:px-6 md:grid-cols-2 md:py-20 lg:px-8">
+          <div>
+            <h1 className="max-w-xl text-4xl font-extrabold tracking-tight sm:text-5xl">
+              Master STEM with 1:1 tutoring tailored to you
+            </h1>
+            <p className="mt-4 max-w-xl text-lg text-gray-600">
+              studySTEM connects you with top tutors in Physics, Math, CS, Biology, and Chemistry. Flexible scheduling, proven results, and transparent pricing.
+            </p>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="#join"
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToId("join");
+                }}
+                className={cx(
+                  brand.gradient,
+                  "inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white shadow-md hover:opacity-95",
+                  focusRing
+                )}
+              >
+                Book a free consult <ArrowRight className="h-4 w-4" />
+              </a>
+              <a
+                href="#how"
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToId("how");
+                }}
+                className={cx(
+                  "inline-flex items-center gap-2 rounded-xl border border-purple-200 px-5 py-3 text-sm font-semibold text-purple-700 hover:bg-purple-50",
+                  focusRing
+                )}
+              >
+                How it works
+              </a>
+            </div>
+            <dl className="mt-8 grid max-w-lg grid-cols-3 gap-4 text-center text-sm">
+              <div className="rounded-lg bg-gray-50 p-3 shadow-sm">
+                <dt className="text-gray-500">Avg. rating</dt>
+                <dd className="mt-1 font-semibold text-gray-900">4.9<Star className="ml-1 inline h-4 w-4" /></dd>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-3 shadow-sm">
+                <dt className="text-gray-500">Tutors</dt>
+                <dd className="mt-1 font-semibold text-gray-900">200+</dd>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-3 shadow-sm">
+                <dt className="text-gray-500">Sessions</dt>
+                <dd className="mt-1 font-semibold text-gray-900">50k+</dd>
+              </div>
+            </dl>
+          </div>
+          <div className="relative">
+            <div className="absolute -left-10 -top-10 h-40 w-40 rounded-full bg-purple-200/60 blur-2xl" />
+            <div className="absolute -bottom-10 -right-10 h-40 w-40 rounded-full bg-indigo-200/60 blur-2xl" />
+            <div className="relative rounded-2xl border border-gray-100 bg-white p-6 shadow-xl">
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { icon: Atom, label: "Physics" },
+                  { icon: Calculator, label: "Math" },
+                  { icon: Binary, label: "Computer Science" },
+                  { icon: Brain, label: "Biology" },
+                  { icon: FlaskConical, label: "Chemistry" },
+                  { icon: BookOpen, label: "Study Skills" },
+                ].map(({ icon: Icon, label }) => (
+                  <div
+                    key={label}
+                    className="flex items-center gap-3 rounded-xl border border-purple-100 bg-purple-50/50 p-3"
+                  >
+                    <div className={cx(brand.gradient, "rounded-lg p-2 text-white")}
+                    >
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-800">{label}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-4 text-xs text-gray-500">
+                Curated, background-checked tutors from top universities.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Subjects */}
+      <section id="subjects" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+          Explore our subjects
+        </h2>
+        <p className="mt-2 max-w-2xl text-gray-600">
+          From fundamentals to advanced topics—pick your path.
+        </p>
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {subjects.map((s) => (
+            <article
+              key={s.title}
+              className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:shadow-md"
+            >
+              <div className="flex items-center gap-3">
+                <span className={cx(brand.gradient, "rounded-xl p-2 text-white")}>{
+                  <s.icon className="h-5 w-5" />
+                }</span>
+                <h3 className="text-lg font-semibold">{s.title}</h3>
+              </div>
+              <p className="mt-3 text-sm text-gray-600">{s.desc}</p>
+              <ul className="mt-4 space-y-2 text-sm text-gray-700">
+                {s.topics.map((t) => (
+                  <li key={t} className="flex items-center gap-2">
+                    <Check className="h-4 w-4" /> {t}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-5">
+                <button
+                  onClick={() => scrollToId("join")}
+                  className={cx(
+                    "inline-flex items-center gap-2 rounded-xl border border-purple-200 px-4 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-50",
+                    focusRing
+                  )}
+                >
+                  Start learning <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* How it Works */}
+      <section id="how" className="bg-gray-50 py-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">How it works</h2>
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                title: "Tell us your goals",
+                desc: "Share your course, topics, and timeline so we can tailor the plan.",
+                icon: Users,
+              },
+              {
+                title: "Get matched fast",
+                desc: "We pair you with a top tutor based on subject expertise and schedule.",
+                icon: ShieldCheck,
+              },
+              {
+                title: "Learn, measure, improve",
+                desc: "Meet online or in-person, track progress, and refine weekly.",
+                icon: Clock,
+              },
+            ].map(({ title, desc, icon: Icon }) => (
+              <div key={title} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                <div className={cx(brand.gradient, "inline-flex rounded-xl p-2 text-white")}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="mt-4 text-lg font-semibold">{title}</h3>
+                <p className="mt-2 text-sm text-gray-600">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Tutors */}
+      <section id="tutors" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="flex items-end justify-between gap-6">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Meet a few tutors</h2>
+            <p className="mt-2 max-w-2xl text-gray-600">
+              Vetted, background-checked, and trained in effective pedagogy.
+            </p>
+          </div>
+          <button
+            onClick={() => scrollToId("join")}
+            className={cx(
+              brand.gradient,
+              "hidden rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-95 md:inline-flex",
+              focusRing
+            )}
+          >
+            Book a session
+          </button>
+        </div>
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {tutors.map((t) => (
+            <article key={t.name} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-4">
+                <img
+                  src={t.avatar}
+                  alt="Tutor avatar"
+                  className="h-14 w-14 rounded-xl object-cover"
+                />
+                <div>
+                  <h3 className="text-lg font-semibold">{t.name}</h3>
+                  <p className="text-sm text-gray-600">{t.title}</p>
+                  <p className="mt-1 text-xs text-gray-500">{t.affil}</p>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2 text-sm text-gray-700">
+                <Star className="h-4 w-4" /> {t.rating} • {t.sessions} sessions
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {t.tags.map((tag) => (
+                  <span key={tag} className="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-5">
+                <button
+                  onClick={() => scrollToId("join")}
+                  className={cx(
+                    "w-full rounded-xl border border-purple-200 px-4 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-50",
+                    focusRing
+                  )}
+                >
+                  Book {t.name}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="bg-gray-50 py-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Simple pricing</h2>
+          <p className="mt-2 max-w-2xl text-gray-600">
+            No surprises. Pause or switch plans any time.
+          </p>
+          <div className="mt-8 grid gap-6 lg:grid-cols-3">
+            {pricing.map((p) => (
+              <article
+                key={p.name}
+                className={cx(
+                  "relative rounded-2xl border bg-white p-6 shadow-sm",
+                  p.popular ? "border-purple-300 ring-2 ring-purple-300" : "border-gray-100"
+                )}
+              >
+                {p.popular && (
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-purple-600 px-3 py-1 text-xs font-semibold text-white shadow">
+                    Most Popular
+                  </span>
+                )}
+                <h3 className="text-lg font-semibold">{p.name}</h3>
+                <p className="mt-1 text-sm text-gray-600">{p.desc}</p>
+                <div className="mt-4 flex items-end gap-1">
+                  <span className="text-3xl font-extrabold">{p.price}</span>
+                  <span className="pb-1 text-sm text-gray-600">/hr</span>
+                </div>
+                <ul className="mt-4 space-y-2 text-sm">
+                  {p.features.map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-gray-700">
+                      <Check className="h-4 w-4" /> {f}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => scrollToId("join")}
+                  className={cx(
+                    "mt-5 w-full rounded-xl border px-4 py-2 text-sm font-semibold",
+                    p.popular
+                      ? "border-transparent "+brand.gradient+" text-white shadow-md hover:opacity-95"
+                      : "border-purple-200 text-purple-700 hover:bg-purple-50",
+                    focusRing
+                  )}
+                >
+                  Choose {p.name}
+                </button>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Proven results</h2>
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {testimonials.map((t) => (
+            <figure key={t.name} className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <blockquote className="text-sm text-gray-700">“{t.quote}”</blockquote>
+              <figcaption className="mt-4 flex items-center gap-3">
+                <img src={t.avatar} alt="Student avatar" className="h-10 w-10 rounded-lg object-cover" />
+                <div>
+                  <div className="text-sm font-semibold">{t.name}</div>
+                  <div className="text-xs text-gray-500">{t.meta}</div>
+                </div>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="bg-gray-50 py-16">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Frequently asked questions</h2>
+          <div className="mt-6 divide-y divide-gray-200 rounded-2xl border border-gray-100 bg-white">
+            {faqs.map((f, i) => (
+              <div key={f.q} className="p-4">
+                <button
+                  className={cx(
+                    "flex w-full items-center justify-between gap-4 text-left text-sm font-medium text-gray-900",
+                    focusRing
+                  )}
+                  aria-expanded={openFaq === i}
+                  onClick={() => setOpenFaq((prev) => (prev === i ? null : i))}
+                >
+                  <span>{f.q}</span>
+                  <ChevronDown className={cx("h-5 w-5 transition", openFaq === i && "rotate-180")} />
+                </button>
+                {openFaq === i && (
+                  <p className="mt-3 text-sm text-gray-600">{f.a}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Join / CTA */}
+      <section id="join" className="relative overflow-hidden py-16">
+        <div className="absolute inset-0 -z-10 opacity-10 [background:radial-gradient(50%_50%_at_50%_0%,#7C3AED,transparent_60%)]" />
+        <div className="mx-auto max-w-4xl rounded-3xl border border-purple-200 bg-white p-8 shadow-xl sm:p-10">
+          <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
+            <div>
+              <h3 className="text-xl font-bold">Ready to level up your STEM courses?</h3>
+              <p className="mt-1 text-sm text-gray-600">Join the waitlist—first session is a free consult.</p>
+            </div>
+            <form className="flex w-full max-w-md gap-2" onSubmit={handleJoinWaitlist}>
+              <label htmlFor="email" className="sr-only">
+                Email address
+              </label>
+              <input
+                id="email"
+                ref={emailRef}
+                type="email"
+                inputMode="email"
+                required
+                placeholder="you@school.edu"
+                className={cx(
+                  "w-full rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-400",
+                  focusRing
+                )}
+              />
+              <button
+                type="submit"
+                className={cx(
+                  brand.gradient,
+                  "whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-95",
+                  focusRing
+                )}
+              >
+                Join
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-100 bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+          <div className="flex flex-col justify-between gap-8 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-3">
+              <div className={cx("h-8 w-8 rounded-xl", brand.gradient)} />
+              <span className="text-sm font-bold"><span className={brand.textGrad}>study</span>STEM</span>
+            </div>
+            <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600">
+              <a href="#subjects" onClick={(e)=>{e.preventDefault();scrollToId("subjects");}} className="hover:text-purple-700">Subjects</a>
+              <a href="#how" onClick={(e)=>{e.preventDefault();scrollToId("how");}} className="hover:text-purple-700">How it Works</a>
+              <a href="#tutors" onClick={(e)=>{e.preventDefault();scrollToId("tutors");}} className="hover:text-purple-700">Tutors</a>
+              <a href="#pricing" onClick={(e)=>{e.preventDefault();scrollToId("pricing");}} className="hover:text-purple-700">Pricing</a>
+              <a href="#faq" onClick={(e)=>{e.preventDefault();scrollToId("faq");}} className="hover:text-purple-700">FAQ</a>
+              <a href="#join" onClick={(e)=>{e.preventDefault();scrollToId("join");}} className="hover:text-purple-700">Get Started</a>
+            </nav>
+          </div>
+          <div className="mt-8 flex flex-col-reverse items-start justify-between gap-6 border-t border-gray-100 pt-6 text-xs text-gray-500 sm:flex-row sm:items-center">
+            <p>© {new Date().getFullYear()} studySTEM. All rights reserved.</p>
+            <div className="flex gap-4">
+              <a href="#" className="hover:text-gray-700">Privacy</a>
+              <a href="#" className="hover:text-gray-700">Terms</a>
+              <a href="#" className="hover:text-gray-700">Contact</a>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </main>
+  );
+}
+
+// ---------- Data (mock) ----------
+const subjects = [
+  {
+    title: "Physics",
+    desc: "Mechanics, E&M, waves, and modern physics for HS, AP, and college.",
+    icon: Atom,
+    topics: ["Kinematics", "Forces", "Circuits", "Optics"],
+  },
+  {
+    title: "Mathematics",
+    desc: "Algebra to Real Analysis. SAT/ACT prep included.",
+    icon: Calculator,
+    topics: ["Algebra", "Calculus", "Linear Algebra", "Probability"],
+  },
+  {
+    title: "Computer Science",
+    desc: "From CS fundamentals to interview prep and projects.",
+    icon: Binary,
+    topics: ["Python/Java", "Data Structures", "Algorithms", "Systems"],
+  },
+  {
+    title: "Biology",
+    desc: "Cell bio to physiology with a focus on conceptual mastery.",
+    icon: Brain,
+    topics: ["Cell Biology", "Genetics", "Ecology", "Physiology"],
+  },
+  {
+    title: "Chemistry",
+    desc: "General, Organic, and Biochem with problem-first sessions.",
+    icon: FlaskConical,
+    topics: ["Stoichiometry", "Thermo", "Acids/Bases", "Mechanisms"],
+  },
+  {
+    title: "Study Skills",
+    desc: "Metacognition, spaced repetition, and exam strategies.",
+    icon: BookOpen,
+    topics: ["Note-taking", "Active Recall", "Time Management", "Test-taking"],
+  },
+] as const;
+
+const tutors = [
+  {
+    name: "Dr. Maya Chen",
+    title: "Physics & Math",
+    affil: "PhD, Caltech",
+    rating: "4.9",
+    sessions: "1,200+",
+    tags: ["AP Physics", "Mechanics", "Calculus"],
+    avatar:
+      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=240&auto=format&fit=crop",
+  },
+  {
+    name: "Jamal Patel",
+    title: "Computer Science",
+    affil: "MS, Stanford",
+    rating: "5.0",
+    sessions: "900+",
+    tags: ["DS&A", "Python", "Interview Prep"],
+    avatar:
+      "https://images.unsplash.com/photo-1602471615287-b21f86d8ff52?q=80&w=240&auto=format&fit=crop",
+  },
+  {
+    name: "Sofia Rivera",
+    title: "Biology & Chemistry",
+    affil: "BS, MIT",
+    rating: "4.8",
+    sessions: "1,050+",
+    tags: ["Genetics", "Organic Chem", "MCAT"],
+    avatar:
+      "https://images.unsplash.com/photo-1547425260-76bcadfb4f2c?q=80&w=240&auto=format&fit=crop",
+  },
+];
+
+const pricing = [
+  {
+    name: "Starter",
+    desc: "Pay-as-you-go for occasional help.",
+    price: "$39",
+    features: ["1:1 live session", "Session notes", "Homework help"],
+    popular: false,
+  },
+  {
+    name: "Plus",
+    desc: "Best for weekly progress and accountability.",
+    price: "$59",
+    features: [
+      "Weekly 1:1 session",
+      "Personalized study plan",
+      "Progress tracking dashboard",
+      "Priority matching",
+    ],
+    popular: true,
+  },
+  {
+    name: "Pro",
+    desc: "For intensive courses and exam prep.",
+    price: "$79",
+    features: [
+      "2x weekly 1:1 sessions",
+      "Exam-cram workshops",
+      "24h Q&A turnaround",
+      "Dedicated success lead",
+    ],
+    popular: false,
+  },
+];
+
+const testimonials = [
+  {
+    name: "Aiden K.",
+    meta: "AP Calculus • Grade from B- to A",
+    quote:
+      "My tutor broke down Calc into patterns I could actually recognize. Jumped a full letter grade in a month.",
+    avatar:
+      "https://images.unsplash.com/photo-1554151228-14d9def656e4?q=80&w=160&auto=format&fit=crop",
+  },
+  {
+    name: "Priya S.",
+    meta: "Intro CS • Passed project with 97%",
+    quote:
+      "The code reviews were game-changing. I finally understood big-O and how to write cleaner functions.",
+    avatar:
+      "https://images.unsplash.com/photo-1544005313-3d7a1b4710b8?q=80&w=160&auto=format&fit=crop",
+  },
+  {
+    name: "Mateo R.",
+    meta: "General Chemistry • A on final",
+    quote:
+      "Practice sets matched our exam style perfectly. The spaced repetition tips saved me.",
+    avatar:
+      "https://images.unsplash.com/photo-1541534401786-2077eed87a72?q=80&w=160&auto=format&fit=crop",
+  },
+];
