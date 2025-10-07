@@ -12,12 +12,16 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     });
 });
 
+// Initialize EmailJS
+(function() {
+    emailjs.init("YOUR_PUBLIC_KEY"); // You'll need to replace this with your actual EmailJS public key
+})();
+
 // Form submission handling
 document.querySelector('form').addEventListener('submit', function(e) {
     e.preventDefault();
     
     // Get form data
-    const formData = new FormData(this);
     const name = this.querySelector('input[type="text"]').value;
     const email = this.querySelector('input[type="email"]').value;
     const subject = this.querySelector('select').value;
@@ -30,11 +34,36 @@ document.querySelector('form').addEventListener('submit', function(e) {
         return;
     }
     
-    // Simulate form submission
-    alert('Thank you for your interest! We will contact you soon to schedule your tutoring session.');
+    // Show loading state
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Sending...';
+    submitBtn.disabled = true;
     
-    // Reset form
-    this.reset();
+    // Prepare email template parameters
+    const templateParams = {
+        from_name: name,
+        from_email: email,
+        subject: subject,
+        preference: preference,
+        message: message,
+        to_email: 'phelpssophia@icloud.com'
+    };
+    
+    // Send email using EmailJS
+    emailjs.send('YOUR_SERVICE_ID', 'YOUR_TEMPLATE_ID', templateParams)
+        .then(function(response) {
+            alert('Thank you for your interest! We will contact you soon to schedule your tutoring session.');
+            document.querySelector('form').reset();
+        }, function(error) {
+            alert('Sorry, there was an error sending your message. Please try again or contact us directly at phelpssophia@icloud.com');
+            console.error('EmailJS error:', error);
+        })
+        .finally(function() {
+            // Reset button state
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+        });
 });
 
 // Add scroll effect to navbar
