@@ -42,15 +42,14 @@ body {
     text-decoration: none;
 }
 
-.nav-logo h2 {
-    color: white;
-    font-weight: 700;
-    font-size: 1.8rem;
-    transition: color 0.3s ease;
+.logo {
+    height: 40px;
+    width: auto;
+    transition: opacity 0.3s ease;
 }
 
-.nav-logo a:hover h2 {
-    color: #e0e7ff;
+.logo:hover {
+    opacity: 0.8;
 }
 
 .nav-menu {
@@ -278,6 +277,16 @@ body {
     font-size: 1.5rem;
     font-weight: 700;
     margin: 0 auto;
+}
+
+.tutor-photo {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 auto;
+    display: block;
+    border: 3px solid #8b5cf6;
 }
 
 .tutor-info h3 {
@@ -577,6 +586,12 @@ body {
 .footer-logo h3 {
     font-size: 1.8rem;
     font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.footer-logo-img {
+    height: 50px;
+    width: auto;
     margin-bottom: 1rem;
 }
 
