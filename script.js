@@ -14,7 +14,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 
 // Initialize EmailJS
 (function() {
-    emailjs.init("YOUR_PUBLIC_KEY"); // You'll need to replace this with your actual EmailJS public key
+    emailjs.init("zcZFF9cngAtv8T_hf");
 })();
 
 // Form submission handling
@@ -51,7 +51,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
     };
     
     // Send email using EmailJS
-    emailjs.send('YOUR_SERVICE_ID', 'YOUR_TEMPLATE_ID', templateParams)
+    emailjs.send('service_swmq1iu', 'template_nfn2tvk', templateParams)
         .then(function(response) {
             alert('Thank you for your interest! We will contact you soon to schedule your tutoring session.');
             document.querySelector('form').reset();
