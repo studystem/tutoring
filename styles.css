@@ -38,10 +38,19 @@ body {
     align-items: center;
 }
 
+.nav-logo a {
+    text-decoration: none;
+}
+
 .nav-logo h2 {
     color: white;
     font-weight: 700;
     font-size: 1.8rem;
+    transition: color 0.3s ease;
+}
+
+.nav-logo a:hover h2 {
+    color: #e0e7ff;
 }
 
 .nav-menu {
