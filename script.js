@@ -1,6 +1,8 @@
-// Smooth scrolling for navigation links
+// Smooth scrolling for navigation links (only for anchor links, not external pages)
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
+        // Don't prevent default for dashboard.html links
+        if (this.getAttribute('href').startsWith('#')) {
         e.preventDefault();
         const target = document.querySelector(this.getAttribute('href'));
         if (target) {
@@ -8,6 +10,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
                 behavior: 'smooth',
                 block: 'start'
             });
+            }
         }
     });
 });
@@ -232,24 +235,28 @@ function updateUIForLoggedInUser(user) {
         const displayName = user.name || `${user.userType.charAt(0).toUpperCase() + user.userType.slice(1)} Account`;
         loginBtn.textContent = displayName;
         loginBtn.style.background = '#e0e7ff';
-        loginBtn.onclick = function() {
-            const dashboardEl = document.getElementById('dashboard');
-            if (dashboardEl) {
-                dashboardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+        loginBtn.onclick = function(e) {
+            e.preventDefault();
+            // Redirect to dashboard page
+            window.location.href = 'dashboard.html';
         };
     }
     
     // Add dashboard link to navigation if it doesn't exist
     if (navMenu) {
-        const existingDashboardLink = navMenu.querySelector('a[href="#dashboard"]');
+        const existingDashboardLink = navMenu.querySelector('a[href="dashboard.html"]') || navMenu.querySelector('a[href="#dashboard"]');
         if (!existingDashboardLink) {
             const dashboardLi = document.createElement('li');
             const dashboardLink = document.createElement('a');
-            dashboardLink.href = '#dashboard';
+            dashboardLink.href = 'dashboard.html';
             dashboardLink.textContent = 'Dashboard';
             dashboardLi.appendChild(dashboardLink);
             navMenu.insertBefore(dashboardLi, navMenu.lastElementChild);
+        } else {
+            // Update existing link if it's still pointing to #dashboard
+            if (existingDashboardLink.href.includes('#dashboard')) {
+                existingDashboardLink.href = 'dashboard.html';
+            }
         }
     }
     
