@@ -216,12 +216,8 @@ function checkAuthStatus() {
     const user = getCurrentUser();
     if (user) {
         updateUIForLoggedInUser(user);
-        // Ensure dashboard is visible
-        const dashboard = document.getElementById('dashboard');
-        if (dashboard) {
-            dashboard.style.display = 'block';
-            dashboard.style.visibility = 'visible';
-        }
+        // If on index.html and user is logged in, they can access dashboard via navigation
+        // Dashboard page will handle its own authentication check
     }
 }
 
@@ -302,7 +298,7 @@ function updateUIForLoggedOut() {
     
     // Remove dashboard link from navigation
     if (navMenu) {
-        const dashboardLink = navMenu.querySelector('a[href="#dashboard"]');
+        const dashboardLink = navMenu.querySelector('a[href="dashboard.html"]') || navMenu.querySelector('a[href="#dashboard"]');
         if (dashboardLink) {
             dashboardLink.parentElement.remove();
         }
@@ -337,7 +333,8 @@ function initAuthModal() {
                 modal.style.display = 'block';
                 document.body.style.overflow = 'hidden';
             } else {
-                document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+                // Redirect to dashboard page
+                window.location.href = 'dashboard.html';
             }
         });
     }
@@ -453,24 +450,12 @@ function initAuthModal() {
                 updateUIForLoggedInUser(user);
                 
                 const welcomeMsg = user.role === 'admin' 
-                    ? `Welcome back, ${user.name}! You have tutor admin access. The dashboard is now available.`
-                    : `Welcome back, ${user.name}! The dashboard is now available.`;
+                    ? `Welcome back, ${user.name}! You have tutor admin access. Redirecting to dashboard...`
+                    : `Welcome back, ${user.name}! Redirecting to dashboard...`;
                 alert(welcomeMsg);
                 
-                // Scroll to dashboard after a brief delay to ensure it's rendered
-                setTimeout(function() {
-                    const dashboard = document.getElementById('dashboard');
-                    if (dashboard) {
-                        // Force show dashboard
-                        dashboard.style.display = 'block';
-                        dashboard.style.visibility = 'visible';
-                        // Scroll to it
-                        window.scrollTo({
-                            top: dashboard.offsetTop - 80,
-                            behavior: 'smooth'
-                        });
-                    }
-                }, 200);
+                // Redirect to dashboard page
+                window.location.href = 'dashboard.html';
             }, 500);
         });
     }
@@ -548,7 +533,12 @@ function initAuthModal() {
                 setCurrentUser(null);
                 updateUIForLoggedOut();
                 alert('You have been logged out successfully.');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                // Redirect to home page
+                if (window.location.pathname.includes('dashboard.html')) {
+                    window.location.href = 'index.html';
+                } else {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
             }
         });
     }
