@@ -1,17 +1,20 @@
 // Smooth scrolling for navigation links (only for anchor links, not external pages)
+document.addEventListener('DOMContentLoaded', function() {
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
-        // Don't prevent default for dashboard.html links
-        if (this.getAttribute('href').startsWith('#')) {
+            // Only handle anchor links, not page links
+            const href = this.getAttribute('href');
+            if (href && href.startsWith('#') && !href.includes('dashboard.html')) {
         e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
+                const target = document.querySelector(href);
         if (target) {
             target.scrollIntoView({
                 behavior: 'smooth',
                 block: 'start'
             });
-            }
         }
+            }
+        });
     });
 });
 
@@ -242,30 +245,35 @@ function updateUIForLoggedInUser(user) {
         };
     }
     
-    // Add dashboard link to navigation if it doesn't exist
-    if (navMenu) {
-        // Remove any old dashboard links first
-        const oldDashboardLinks = navMenu.querySelectorAll('a[href="#dashboard"], a[href="dashboard.html"]');
-        oldDashboardLinks.forEach(link => {
-            link.parentElement.remove();
+    // Show dashboard link in navigation
+    const dashboardNavItem = document.getElementById('dashboardNavItem');
+    const dashboardNavLink = document.getElementById('dashboardNavLink');
+    
+    if (dashboardNavItem && dashboardNavLink) {
+        dashboardNavItem.style.display = 'list-item';
+        // Ensure the link works
+        dashboardNavLink.addEventListener('click', function(e) {
+            // Let the default navigation happen, but ensure it works
+            if (!this.href || this.href.includes('#')) {
+                e.preventDefault();
+                window.location.href = 'dashboard.html';
+            }
         });
-        
-        // Create new dashboard link
-        const dashboardLi = document.createElement('li');
-        const dashboardLink = document.createElement('a');
-        dashboardLink.href = 'dashboard.html';
-        dashboardLink.textContent = 'Dashboard';
-        dashboardLink.style.textDecoration = 'none';
-        dashboardLink.style.color = 'white';
-        dashboardLink.style.cursor = 'pointer';
-        dashboardLi.appendChild(dashboardLink);
-        navMenu.insertBefore(dashboardLi, navMenu.lastElementChild);
-        
-        // Ensure the link works by adding explicit click handler
-        dashboardLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            window.location.href = 'dashboard.html';
-        });
+    } else if (navMenu) {
+        // Fallback: create link dynamically if HTML element doesn't exist
+        const existingLink = navMenu.querySelector('#dashboardNavLink') || navMenu.querySelector('a[href="dashboard.html"]');
+        if (!existingLink) {
+            const dashboardLi = document.createElement('li');
+            dashboardLi.id = 'dashboardNavItem';
+            const dashboardLink = document.createElement('a');
+            dashboardLink.id = 'dashboardNavLink';
+            dashboardLink.href = 'dashboard.html';
+            dashboardLink.textContent = 'Dashboard';
+            dashboardLi.appendChild(dashboardLink);
+            navMenu.insertBefore(dashboardLi, navMenu.lastElementChild);
+        } else {
+            existingLink.closest('li').style.display = 'list-item';
+        }
     }
     
     // Show dashboard - force display
@@ -311,11 +319,14 @@ function updateUIForLoggedOut() {
         };
     }
     
-    // Remove dashboard link from navigation
-    if (navMenu) {
-        const dashboardLink = navMenu.querySelector('a[href="dashboard.html"]') || navMenu.querySelector('a[href="#dashboard"]');
-        if (dashboardLink) {
-            dashboardLink.parentElement.remove();
+    // Hide dashboard link from navigation
+    const dashboardNavItem = document.getElementById('dashboardNavItem');
+    if (dashboardNavItem) {
+        dashboardNavItem.style.display = 'none';
+    } else if (navMenu) {
+        const dashboardLink = navMenu.querySelector('#dashboardNavLink') || navMenu.querySelector('a[href="dashboard.html"]');
+        if (dashboardLink && dashboardLink.closest('li')) {
+            dashboardLink.closest('li').style.display = 'none';
         }
     }
     
