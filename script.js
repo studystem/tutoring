@@ -25,10 +25,15 @@ const TUTOR_ACCOUNTS = [
 
 // Helper function to find tutor account
 function findTutorAccount(email, password) {
-    return TUTOR_ACCOUNTS.find(tutor => 
-        tutor.email.toLowerCase() === email.toLowerCase() && 
-        tutor.password === password
-    );
+    if (!email || !password) return null;
+    const normalizedEmail = email.toLowerCase().trim();
+    const result = TUTOR_ACCOUNTS.find(tutor => {
+        const tutorEmail = tutor.email.toLowerCase().trim();
+        const emailMatch = tutorEmail === normalizedEmail;
+        const passwordMatch = tutor.password === password;
+        return emailMatch && passwordMatch;
+    });
+    return result;
 }
 
 // Smooth scrolling for navigation links (only for anchor links, not external pages)
@@ -482,11 +487,11 @@ function initAuthModal() {
         loginFormElement.addEventListener('submit', function(e) {
             e.preventDefault();
             
-            const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+            const emailInput = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value;
             const userType = document.getElementById('loginUserType').value;
             
-            if (!email || !password) {
+            if (!emailInput || !password) {
                 alert('Please enter your email and password.');
                 return;
             }
@@ -496,10 +501,12 @@ function initAuthModal() {
             submitBtn.textContent = 'Logging in...';
             submitBtn.disabled = true;
             
-            // Check if it's a tutor account
+            // Check if it's a tutor account FIRST (before checking userType)
             let user = null;
-            const tutorAccount = findTutorAccount(email, password);
+            const tutorAccount = findTutorAccount(emailInput, password);
+            
             if (tutorAccount) {
+                // Tutor account found - skip userType requirement completely
                 user = {
                     name: tutorAccount.name,
                     email: tutorAccount.email,
@@ -507,13 +514,16 @@ function initAuthModal() {
                     role: 'admin'
                 };
             } else {
-                // For other users, require userType selection
+                // Not a tutor - require userType selection for regular users
                 if (!userType) {
                     alert('Please select whether you are a Parent or Student.');
                     submitBtn.textContent = originalText;
                     submitBtn.disabled = false;
                     return;
                 }
+                
+                // Use lowercase email for regular user lookup
+                const email = emailInput.toLowerCase();
                 
                 // Check if user is approved
                 if (!isUserApproved(email)) {
