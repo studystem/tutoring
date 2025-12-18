@@ -979,6 +979,25 @@ body {
     transform: translateY(-2px);
 }
 
+.btn-download {
+    display: inline-block;
+    background: linear-gradient(135deg, #6b46c1 0%, #8b5cf6 100%);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-top: 1rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.btn-download:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(107, 70, 193, 0.3);
+}
+
 /* Footer */
 .footer {
     background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);

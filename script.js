@@ -634,14 +634,35 @@ function loadNotes() {
     filteredNotes.sort((a, b) => new Date(b.date) - new Date(a.date));
     
     container.innerHTML = filteredNotes.map((note, noteIndex) => {
-        // Find original index for deletion
-        const originalIndex = notes.findIndex(n => n === note);
+        // Find original index in full notes array for deletion and file download
+        const originalIndex = notes.findIndex(n => 
+            n.title === note.title && 
+            n.studentEmail === note.studentEmail && 
+            n.date === note.date
+        );
+        
         const user = getCurrentUser();
         const deleteBtn = (user && user.role === 'admin') ? 
             `<button class="delete-btn" onclick="deleteNote(${originalIndex})">Delete Note</button>` : '';
         
         const studentInfo = user.role === 'admin' && note.studentEmail ? 
             `<span>Student: ${note.studentName || note.studentEmail}</span>` : '';
+        
+        // File download button
+        let fileDownloadBtn = '';
+        if (note.file) {
+            if (note.file.name && note.file.data) {
+                // New format with file data
+                fileDownloadBtn = `
+                    <a href="#" class="btn-download" onclick="downloadNoteFile(${originalIndex}); return false;">
+                        📎 Download: ${note.file.name} (${formatFileSize(note.file.size)})
+                    </a>
+                `;
+            } else if (typeof note.file === 'string') {
+                // Legacy format (just filename)
+                fileDownloadBtn = `<p style="color: #6b46c1; margin-top: 0.5rem;">📎 File: ${note.file} (file not available for download)</p>`;
+            }
+        }
         
         return `
             <div class="note-card">
@@ -652,6 +673,7 @@ function loadNotes() {
                     ${studentInfo}
                 </div>
                 <div class="note-content">${note.content}</div>
+                ${fileDownloadBtn}
                 ${deleteBtn}
             </div>
         `;
@@ -667,6 +689,45 @@ window.deleteNote = function(index) {
         loadNotes();
     }
 };
+
+// File download function
+window.downloadNoteFile = function(noteIndex) {
+    const notes = getStoredNotes();
+    if (noteIndex >= 0 && noteIndex < notes.length) {
+        const note = notes[noteIndex];
+        if (note.file && note.file.data) {
+            // Create a blob from the base64 data
+            const byteCharacters = atob(note.file.data.split(',')[1]);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: note.file.type });
+            
+            // Create download link
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = note.file.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } else {
+            alert('File not available for download.');
+        }
+    }
+};
+
+// Format file size helper
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
 
 // Calendar Management with Google Calendar-style view
 let currentCalendarDate = new Date();
@@ -860,7 +921,8 @@ function initTutorFunctions() {
             const title = document.getElementById('noteTitle').value;
             const subject = document.getElementById('noteSubject').value;
             const content = document.getElementById('noteContent').value;
-            const file = document.getElementById('noteFile').files[0];
+            const fileInput = document.getElementById('noteFile');
+            const file = fileInput.files[0];
             
             if (!studentEmail || !title || !subject || !content) {
                 alert('Please fill in all required fields, including selecting a student.');
@@ -872,24 +934,69 @@ function initTutorFunctions() {
             const student = approved.find(u => u.email === studentEmail);
             const studentName = student ? student.name : studentEmail;
             
-            const note = {
-                studentEmail: studentEmail,
-                studentName: studentName,
-                title: title,
-                subject: subject,
-                content: content,
-                date: new Date().toISOString(),
-                file: file ? file.name : null
-            };
-            
-            const notes = getStoredNotes();
-            notes.push(note);
-            saveNotes(notes);
-            
-            alert(`Notes uploaded successfully for ${studentName}!`);
-            uploadNotesForm.reset();
-            loadStudentDropdown(); // Reset dropdown
-            loadNotes();
+            // Handle file upload
+            if (file) {
+                // Check file size (limit to 5MB to avoid localStorage issues)
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('File size must be less than 5MB. Please choose a smaller file.');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const fileData = {
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        data: e.target.result // Base64 encoded file
+                    };
+                    
+                    const note = {
+                        studentEmail: studentEmail,
+                        studentName: studentName,
+                        title: title,
+                        subject: subject,
+                        content: content,
+                        date: new Date().toISOString(),
+                        file: fileData
+                    };
+                    
+                    const notes = getStoredNotes();
+                    notes.push(note);
+                    saveNotes(notes);
+                    
+                    alert(`Notes and file uploaded successfully for ${studentName}!`);
+                    uploadNotesForm.reset();
+                    loadStudentDropdown(); // Reset dropdown
+                    loadNotes();
+                };
+                
+                reader.onerror = function() {
+                    alert('Error reading file. Please try again.');
+                };
+                
+                reader.readAsDataURL(file);
+            } else {
+                // No file uploaded
+                const note = {
+                    studentEmail: studentEmail,
+                    studentName: studentName,
+                    title: title,
+                    subject: subject,
+                    content: content,
+                    date: new Date().toISOString(),
+                    file: null
+                };
+                
+                const notes = getStoredNotes();
+                notes.push(note);
+                saveNotes(notes);
+                
+                alert(`Notes uploaded successfully for ${studentName}!`);
+                uploadNotesForm.reset();
+                loadStudentDropdown(); // Reset dropdown
+                loadNotes();
+            }
         });
     }
     
