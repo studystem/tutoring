@@ -245,20 +245,10 @@ function updateUIForLoggedInUser(user) {
         };
     }
     
-    // Show dashboard link in navigation
+    // Show dashboard link in navigation - simple approach, just show/hide
     const dashboardNavItem = document.getElementById('dashboardNavItem');
-    const dashboardNavLink = document.getElementById('dashboardNavLink');
-    
-    if (dashboardNavItem && dashboardNavLink) {
+    if (dashboardNavItem) {
         dashboardNavItem.style.display = 'list-item';
-        // Ensure the link works
-        dashboardNavLink.addEventListener('click', function(e) {
-            // Let the default navigation happen, but ensure it works
-            if (!this.href || this.href.includes('#')) {
-                e.preventDefault();
-                window.location.href = 'dashboard.html';
-            }
-        });
     } else if (navMenu) {
         // Fallback: create link dynamically if HTML element doesn't exist
         const existingLink = navMenu.querySelector('#dashboardNavLink') || navMenu.querySelector('a[href="dashboard.html"]');
@@ -272,7 +262,11 @@ function updateUIForLoggedInUser(user) {
             dashboardLi.appendChild(dashboardLink);
             navMenu.insertBefore(dashboardLi, navMenu.lastElementChild);
         } else {
-            existingLink.closest('li').style.display = 'list-item';
+            const li = existingLink.closest('li');
+            if (li) {
+                li.id = 'dashboardNavItem';
+                li.style.display = 'list-item';
+            }
         }
     }
     
@@ -340,7 +334,15 @@ function updateUIForLoggedOut() {
 }
 
 // Authentication Modal Functionality
+let authModalInitialized = false;
+
 function initAuthModal() {
+    // Prevent multiple initializations
+    if (authModalInitialized) {
+        return;
+    }
+    authModalInitialized = true;
+    
     const modal = document.getElementById('authModal');
     const loginBtn = document.getElementById('loginBtn');
     const closeBtn = document.querySelector('.close');
@@ -351,13 +353,22 @@ function initAuthModal() {
     const loginFormElement = document.getElementById('loginFormElement');
     const signupFormElement = document.getElementById('signupFormElement');
     
-    // Open modal
-    if (loginBtn) {
-        loginBtn.addEventListener('click', function() {
+    if (!modal || !loginBtn) {
+        return; // Elements don't exist on this page
+    }
+    
+    // Open modal - check if already has listener to avoid duplicates
+    if (!loginBtn.hasAttribute('data-auth-listener')) {
+        loginBtn.setAttribute('data-auth-listener', 'true');
+        loginBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             const user = getCurrentUser();
             if (!user) {
-                modal.style.display = 'block';
-                document.body.style.overflow = 'hidden';
+                if (modal) {
+                    modal.style.display = 'block';
+                    document.body.style.overflow = 'hidden';
+                }
             } else {
                 // Redirect to dashboard page
                 window.location.href = 'dashboard.html';

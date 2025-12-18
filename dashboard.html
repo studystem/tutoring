@@ -227,14 +227,59 @@
                 return;
             }
             
-            // Update UI for logged in user
-            updateUIForLoggedInUser(user);
+            // Update UI for logged in user (but don't re-initialize auth modal)
+            const loginBtn = document.getElementById('loginBtn');
+            const dashboard = document.getElementById('dashboard');
+            const tutorPanel = document.getElementById('tutorPanel');
+            const navMenu = document.querySelector('.nav-menu');
+            
+            if (loginBtn) {
+                const displayName = user.name || `${user.userType.charAt(0).toUpperCase() + user.userType.slice(1)} Account`;
+                loginBtn.textContent = displayName;
+                loginBtn.style.background = '#e0e7ff';
+                loginBtn.onclick = function(e) {
+                    e.preventDefault();
+                    window.location.href = 'dashboard.html';
+                };
+            }
+            
+            // Show dashboard
+            if (dashboard) {
+                dashboard.style.display = 'block';
+                dashboard.style.visibility = 'visible';
+            }
+            
+            // Show tutor panel if admin
+            const isTutor = user.role === 'admin' || user.userType === 'tutor';
+            if (isTutor && tutorPanel) {
+                tutorPanel.style.display = 'block';
+                tutorPanel.style.visibility = 'visible';
+            }
+            
+            // Load notes and calendar
+            setTimeout(function() {
+                loadNotes();
+                loadCalendar();
+                if (isTutor) {
+                    loadPendingAccounts();
+                    loadStudentDropdown();
+                }
+            }, 100);
             
             // Initialize tutor functions
             initTutorFunctions();
             
-            // Initialize authentication modal (for logout/login)
-            initAuthModal();
+            // Initialize authentication modal (for logout only)
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', function() {
+                    if (confirm('Are you sure you want to log out?')) {
+                        setCurrentUser(null);
+                        alert('You have been logged out successfully.');
+                        window.location.href = 'index.html';
+                    }
+                });
+            }
         });
     </script>
 </body>
