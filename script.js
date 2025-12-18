@@ -165,6 +165,12 @@ function checkAuthStatus() {
     const user = getCurrentUser();
     if (user) {
         updateUIForLoggedInUser(user);
+        // Ensure dashboard is visible
+        const dashboard = document.getElementById('dashboard');
+        if (dashboard) {
+            dashboard.style.display = 'block';
+            dashboard.style.visibility = 'visible';
+        }
     }
 }
 
@@ -176,10 +182,14 @@ function updateUIForLoggedInUser(user) {
     const navMenu = document.querySelector('.nav-menu');
     
     if (loginBtn) {
-        loginBtn.textContent = user.name || `${user.userType.charAt(0).toUpperCase() + user.userType.slice(1)} Account`;
+        const displayName = user.name || `${user.userType.charAt(0).toUpperCase() + user.userType.slice(1)} Account`;
+        loginBtn.textContent = displayName;
         loginBtn.style.background = '#e0e7ff';
         loginBtn.onclick = function() {
-            document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+            const dashboardEl = document.getElementById('dashboard');
+            if (dashboardEl) {
+                dashboardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         };
     }
     
@@ -196,19 +206,28 @@ function updateUIForLoggedInUser(user) {
         }
     }
     
+    // Show dashboard - force display
     if (dashboard) {
         dashboard.style.display = 'block';
+        dashboard.style.visibility = 'visible';
+        dashboard.classList.add('dashboard-visible');
     }
     
-    if (user.role === 'admin' || user.userType === 'tutor') {
-        if (tutorPanel) {
-            tutorPanel.style.display = 'block';
-        }
+    // Show tutor panel for admin/tutor users
+    const isTutor = user.role === 'admin' || user.userType === 'tutor';
+    
+    if (isTutor && tutorPanel) {
+        tutorPanel.style.display = 'block';
+        tutorPanel.style.visibility = 'visible';
+    } else if (tutorPanel) {
+        tutorPanel.style.display = 'none';
     }
     
     // Load and display notes and calendar
-    loadNotes();
-    loadCalendar();
+    setTimeout(function() {
+        loadNotes();
+        loadCalendar();
+    }, 100);
 }
 
 function updateUIForLoggedOut() {
@@ -308,12 +327,12 @@ function initAuthModal() {
         loginFormElement.addEventListener('submit', function(e) {
             e.preventDefault();
             
-            const email = document.getElementById('loginEmail').value;
+            const email = document.getElementById('loginEmail').value.trim().toLowerCase();
             const password = document.getElementById('loginPassword').value;
             const userType = document.getElementById('loginUserType').value;
             
-            if (!email || !password || !userType) {
-                alert('Please fill in all fields.');
+            if (!email || !password) {
+                alert('Please enter your email and password.');
                 return;
             }
             
@@ -324,7 +343,7 @@ function initAuthModal() {
             
             // Check if it's the tutor account
             let user = null;
-            if (email === TUTOR_ACCOUNT.email && password === TUTOR_ACCOUNT.password) {
+            if (email === TUTOR_ACCOUNT.email.toLowerCase() && password === TUTOR_ACCOUNT.password) {
                 user = {
                     name: TUTOR_ACCOUNT.name,
                     email: TUTOR_ACCOUNT.email,
@@ -332,6 +351,13 @@ function initAuthModal() {
                     role: 'admin'
                 };
             } else {
+                // For other users, require userType selection
+                if (!userType) {
+                    alert('Please select whether you are a Parent or Student.');
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                }
                 // For other users, check if they exist (in a real app, this would check a database)
                 // For now, we'll allow any login for demo purposes
                 user = {
@@ -344,15 +370,34 @@ function initAuthModal() {
             
             setTimeout(function() {
                 setCurrentUser(user);
-                updateUIForLoggedInUser(user);
                 modal.style.display = 'none';
                 document.body.style.overflow = 'auto';
                 loginFormElement.reset();
                 submitBtn.textContent = originalText;
                 submitBtn.disabled = false;
                 
-                alert(`Welcome back, ${user.name}!`);
-                document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+                // Update UI
+                updateUIForLoggedInUser(user);
+                
+                const welcomeMsg = user.role === 'admin' 
+                    ? `Welcome back, ${user.name}! You have tutor admin access. The dashboard is now available.`
+                    : `Welcome back, ${user.name}! The dashboard is now available.`;
+                alert(welcomeMsg);
+                
+                // Scroll to dashboard after a brief delay to ensure it's rendered
+                setTimeout(function() {
+                    const dashboard = document.getElementById('dashboard');
+                    if (dashboard) {
+                        // Force show dashboard
+                        dashboard.style.display = 'block';
+                        dashboard.style.visibility = 'visible';
+                        // Scroll to it
+                        window.scrollTo({
+                            top: dashboard.offsetTop - 80,
+                            behavior: 'smooth'
+                        });
+                    }
+                }, 200);
             }, 500);
         });
     }

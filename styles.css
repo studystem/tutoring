@@ -597,6 +597,11 @@ body {
     min-height: 100vh;
 }
 
+.dashboard-visible {
+    display: block !important;
+    visibility: visible !important;
+}
+
 .dashboard-header {
     display: flex;
     justify-content: space-between;
