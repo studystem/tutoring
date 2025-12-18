@@ -217,9 +217,15 @@
 
     <script src="script.js"></script>
     <script>
-        // Dashboard-specific initialization
-        document.addEventListener('DOMContentLoaded', function() {
+        // Dashboard-specific initialization - wait for script.js to fully load
+        function initDashboard() {
             // Check if user is logged in, if not redirect to home
+            if (typeof getCurrentUser !== 'function') {
+                // Script not loaded yet, wait a bit
+                setTimeout(initDashboard, 100);
+                return;
+            }
+            
             const user = getCurrentUser();
             if (!user) {
                 alert('Please log in to access the dashboard.');
@@ -280,7 +286,15 @@
                     }
                 });
             }
-        });
+        }
+        
+        // Start initialization when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDashboard);
+        } else {
+            // DOM already loaded
+            initDashboard();
+        }
     </script>
 </body>
 </html>

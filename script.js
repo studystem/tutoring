@@ -69,11 +69,12 @@ function sendEmailNotification(toEmail, toName, subject, message, notificationTy
         });
 }
 
-// Form submission handling (contact form only)
-const contactForm = document.querySelector('#contact form');
-if (contactForm) {
-    contactForm.addEventListener('submit', function(e) {
-    e.preventDefault();
+// Form submission handling (contact form only) - wait for DOM
+document.addEventListener('DOMContentLoaded', function() {
+    const contactForm = document.querySelector('#contact form');
+    if (contactForm) {
+        contactForm.addEventListener('submit', function(e) {
+            e.preventDefault();
     
     // Get form data
     const name = this.querySelector('input[type="text"]').value;
@@ -118,8 +119,9 @@ if (contactForm) {
             submitBtn.textContent = originalText;
             submitBtn.disabled = false;
         });
-    });
-}
+        });
+    }
+});
 
 // Add scroll effect to navbar
 window.addEventListener('scroll', function() {
