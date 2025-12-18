@@ -106,7 +106,142 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize authentication modal
     initAuthModal();
+    
+    // Initialize tutor functions
+    initTutorFunctions();
+    
+    // Check if user is already logged in
+    checkAuthStatus();
 });
+
+// User Management and Data Storage
+const USER_STORAGE_KEY = 'studystem_user';
+const NOTES_STORAGE_KEY = 'studystem_notes';
+const CALENDAR_STORAGE_KEY = 'studystem_calendar';
+
+// Special tutor account
+const TUTOR_ACCOUNT = {
+    name: 'Sophia Phelps',
+    email: 'phelpssophia@icloud.com',
+    password: 'Ilikederp123!',
+    userType: 'tutor',
+    role: 'admin'
+};
+
+// Get stored data
+function getStoredNotes() {
+    const notes = localStorage.getItem(NOTES_STORAGE_KEY);
+    return notes ? JSON.parse(notes) : [];
+}
+
+function getStoredCalendar() {
+    const calendar = localStorage.getItem(CALENDAR_STORAGE_KEY);
+    return calendar ? JSON.parse(calendar) : [];
+}
+
+function saveNotes(notes) {
+    localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+}
+
+function saveCalendar(events) {
+    localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(events));
+}
+
+function getCurrentUser() {
+    const user = localStorage.getItem(USER_STORAGE_KEY);
+    return user ? JSON.parse(user) : null;
+}
+
+function setCurrentUser(user) {
+    if (user) {
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    } else {
+        localStorage.removeItem(USER_STORAGE_KEY);
+    }
+}
+
+// Check if user is logged in on page load
+function checkAuthStatus() {
+    const user = getCurrentUser();
+    if (user) {
+        updateUIForLoggedInUser(user);
+    }
+}
+
+// Update UI based on login status
+function updateUIForLoggedInUser(user) {
+    const loginBtn = document.getElementById('loginBtn');
+    const dashboard = document.getElementById('dashboard');
+    const tutorPanel = document.getElementById('tutorPanel');
+    const navMenu = document.querySelector('.nav-menu');
+    
+    if (loginBtn) {
+        loginBtn.textContent = user.name || `${user.userType.charAt(0).toUpperCase() + user.userType.slice(1)} Account`;
+        loginBtn.style.background = '#e0e7ff';
+        loginBtn.onclick = function() {
+            document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+        };
+    }
+    
+    // Add dashboard link to navigation if it doesn't exist
+    if (navMenu) {
+        const existingDashboardLink = navMenu.querySelector('a[href="#dashboard"]');
+        if (!existingDashboardLink) {
+            const dashboardLi = document.createElement('li');
+            const dashboardLink = document.createElement('a');
+            dashboardLink.href = '#dashboard';
+            dashboardLink.textContent = 'Dashboard';
+            dashboardLi.appendChild(dashboardLink);
+            navMenu.insertBefore(dashboardLi, navMenu.lastElementChild);
+        }
+    }
+    
+    if (dashboard) {
+        dashboard.style.display = 'block';
+    }
+    
+    if (user.role === 'admin' || user.userType === 'tutor') {
+        if (tutorPanel) {
+            tutorPanel.style.display = 'block';
+        }
+    }
+    
+    // Load and display notes and calendar
+    loadNotes();
+    loadCalendar();
+}
+
+function updateUIForLoggedOut() {
+    const loginBtn = document.getElementById('loginBtn');
+    const dashboard = document.getElementById('dashboard');
+    const tutorPanel = document.getElementById('tutorPanel');
+    const navMenu = document.querySelector('.nav-menu');
+    
+    if (loginBtn) {
+        loginBtn.textContent = 'Log In / Sign Up';
+        loginBtn.style.background = 'white';
+        loginBtn.onclick = function() {
+            document.getElementById('authModal').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        };
+    }
+    
+    // Remove dashboard link from navigation
+    if (navMenu) {
+        const dashboardLink = navMenu.querySelector('a[href="#dashboard"]');
+        if (dashboardLink) {
+            dashboardLink.parentElement.remove();
+        }
+    }
+    
+    if (dashboard) {
+        dashboard.style.display = 'none';
+    }
+    
+    if (tutorPanel) {
+        tutorPanel.style.display = 'none';
+    }
+}
 
 // Authentication Modal Functionality
 function initAuthModal() {
@@ -123,8 +258,13 @@ function initAuthModal() {
     // Open modal
     if (loginBtn) {
         loginBtn.addEventListener('click', function() {
-            modal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
+            const user = getCurrentUser();
+            if (!user) {
+                modal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+            }
         });
     }
     
@@ -177,27 +317,43 @@ function initAuthModal() {
                 return;
             }
             
-            // Simulate login (in a real app, this would connect to a backend)
             const submitBtn = this.querySelector('button[type="submit"]');
             const originalText = submitBtn.textContent;
             submitBtn.textContent = 'Logging in...';
             submitBtn.disabled = true;
             
-            // Simulate API call
+            // Check if it's the tutor account
+            let user = null;
+            if (email === TUTOR_ACCOUNT.email && password === TUTOR_ACCOUNT.password) {
+                user = {
+                    name: TUTOR_ACCOUNT.name,
+                    email: TUTOR_ACCOUNT.email,
+                    userType: 'tutor',
+                    role: 'admin'
+                };
+            } else {
+                // For other users, check if they exist (in a real app, this would check a database)
+                // For now, we'll allow any login for demo purposes
+                user = {
+                    name: email.split('@')[0],
+                    email: email,
+                    userType: userType,
+                    role: 'user'
+                };
+            }
+            
             setTimeout(function() {
-                alert(`Welcome back! You are logged in as a ${userType}.`);
+                setCurrentUser(user);
+                updateUIForLoggedInUser(user);
                 modal.style.display = 'none';
                 document.body.style.overflow = 'auto';
                 loginFormElement.reset();
                 submitBtn.textContent = originalText;
                 submitBtn.disabled = false;
                 
-                // Update login button to show user is logged in
-                if (loginBtn) {
-                    loginBtn.textContent = `${userType.charAt(0).toUpperCase() + userType.slice(1)} Account`;
-                    loginBtn.style.background = '#e0e7ff';
-                }
-            }, 1000);
+                alert(`Welcome back, ${user.name}!`);
+                document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+            }, 500);
         });
     }
     
@@ -227,27 +383,220 @@ function initAuthModal() {
                 return;
             }
             
-            // Simulate signup (in a real app, this would connect to a backend)
             const submitBtn = this.querySelector('button[type="submit"]');
             const originalText = submitBtn.textContent;
             submitBtn.textContent = 'Creating account...';
             submitBtn.disabled = true;
             
-            // Simulate API call
             setTimeout(function() {
-                alert(`Account created successfully! Welcome, ${name}! You are registered as a ${userType}.`);
+                const user = {
+                    name: name,
+                    email: email,
+                    userType: userType,
+                    role: 'user'
+                };
+                
+                setCurrentUser(user);
+                updateUIForLoggedInUser(user);
                 modal.style.display = 'none';
                 document.body.style.overflow = 'auto';
                 signupFormElement.reset();
                 submitBtn.textContent = originalText;
                 submitBtn.disabled = false;
                 
-                // Update login button to show user is logged in
-                if (loginBtn) {
-                    loginBtn.textContent = `${userType.charAt(0).toUpperCase() + userType.slice(1)} Account`;
-                    loginBtn.style.background = '#e0e7ff';
-                }
-            }, 1000);
+                alert(`Account created successfully! Welcome, ${name}!`);
+                document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+            }, 500);
+        });
+    }
+    
+    // Logout functionality
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+            if (confirm('Are you sure you want to log out?')) {
+                setCurrentUser(null);
+                updateUIForLoggedOut();
+                alert('You have been logged out successfully.');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        });
+    }
+}
+
+// Notes Management
+function loadNotes() {
+    const notes = getStoredNotes();
+    const container = document.getElementById('notesContainer');
+    if (!container) return;
+    
+    if (notes.length === 0) {
+        container.innerHTML = '<p class="empty-state">No notes available yet. Check back soon!</p>';
+        return;
+    }
+    
+    // Sort notes by date (newest first)
+    notes.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    container.innerHTML = notes.map((note, index) => {
+        const user = getCurrentUser();
+        const deleteBtn = (user && user.role === 'admin') ? 
+            `<button class="delete-btn" onclick="deleteNote(${index})">Delete Note</button>` : '';
+        
+        return `
+            <div class="note-card">
+                <h4>${note.title}</h4>
+                <div class="note-meta">
+                    <span>Subject: ${note.subject}</span>
+                    <span>Date: ${new Date(note.date).toLocaleDateString()}</span>
+                </div>
+                <div class="note-content">${note.content}</div>
+                ${deleteBtn}
+            </div>
+        `;
+    }).join('');
+}
+
+// Make delete functions globally accessible
+window.deleteNote = function(index) {
+    if (confirm('Are you sure you want to delete this note?')) {
+        const notes = getStoredNotes();
+        notes.splice(index, 1);
+        saveNotes(notes);
+        loadNotes();
+    }
+};
+
+// Calendar Management
+function loadCalendar() {
+    const events = getStoredCalendar();
+    const container = document.getElementById('calendarContainer');
+    if (!container) return;
+    
+    if (events.length === 0) {
+        container.innerHTML = '<p class="empty-state">No upcoming sessions scheduled.</p>';
+        return;
+    }
+    
+    // Sort events by date
+    events.sort((a, b) => {
+        const dateA = new Date(a.date + 'T' + a.time);
+        const dateB = new Date(b.date + 'T' + b.time);
+        return dateA - dateB;
+    });
+    
+    container.innerHTML = events.map((event, index) => {
+        const user = getCurrentUser();
+        const deleteBtn = (user && user.role === 'admin') ? 
+            `<button class="delete-btn" onclick="deleteEvent(${index})">Delete Event</button>` : '';
+        
+        const eventDate = new Date(event.date + 'T' + event.time);
+        const isPast = eventDate < new Date();
+        
+        return `
+            <div class="calendar-event" style="${isPast ? 'opacity: 0.7;' : ''}">
+                <h4>${event.title}</h4>
+                <div class="event-meta">
+                    <span>📅 ${new Date(event.date).toLocaleDateString()}</span>
+                    <span>🕐 ${event.time}</span>
+                    <span>⏱️ ${event.duration} minutes</span>
+                </div>
+                ${event.description ? `<div class="event-description">${event.description}</div>` : ''}
+                ${deleteBtn}
+            </div>
+        `;
+    }).join('');
+}
+
+window.deleteEvent = function(index) {
+    if (confirm('Are you sure you want to delete this event?')) {
+        const events = getStoredCalendar();
+        events.splice(index, 1);
+        saveCalendar(events);
+        loadCalendar();
+    }
+};
+
+// Initialize tutor functionality
+function initTutorFunctions() {
+    // Set default date to today for calendar form
+    const eventDateInput = document.getElementById('eventDate');
+    if (eventDateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        eventDateInput.setAttribute('min', today);
+    }
+    
+    // Upload notes form
+    const uploadNotesForm = document.getElementById('uploadNotesForm');
+    if (uploadNotesForm) {
+        uploadNotesForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const title = document.getElementById('noteTitle').value;
+            const subject = document.getElementById('noteSubject').value;
+            const content = document.getElementById('noteContent').value;
+            const file = document.getElementById('noteFile').files[0];
+            
+            if (!title || !subject || !content) {
+                alert('Please fill in all required fields.');
+                return;
+            }
+            
+            const note = {
+                title: title,
+                subject: subject,
+                content: content,
+                date: new Date().toISOString(),
+                file: file ? file.name : null
+            };
+            
+            const notes = getStoredNotes();
+            notes.push(note);
+            saveNotes(notes);
+            
+            alert('Notes uploaded successfully!');
+            uploadNotesForm.reset();
+            loadNotes();
+        });
+    }
+    
+    // Calendar form
+    const calendarForm = document.getElementById('calendarForm');
+    if (calendarForm) {
+        calendarForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const title = document.getElementById('eventTitle').value;
+            const date = document.getElementById('eventDate').value;
+            const time = document.getElementById('eventTime').value;
+            const duration = document.getElementById('eventDuration').value;
+            const description = document.getElementById('eventDescription').value;
+            
+            if (!title || !date || !time || !duration) {
+                alert('Please fill in all required fields.');
+                return;
+            }
+            
+            const event = {
+                title: title,
+                date: date,
+                time: time,
+                duration: duration,
+                description: description || ''
+            };
+            
+            const events = getStoredCalendar();
+            events.push(event);
+            saveCalendar(events);
+            
+            alert('Event added to calendar successfully!');
+            calendarForm.reset();
+            // Reset date to today
+            if (eventDateInput) {
+                const today = new Date().toISOString().split('T')[0];
+                eventDateInput.value = today;
+            }
+            loadCalendar();
         });
     }
 }
