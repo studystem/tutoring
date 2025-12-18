@@ -17,6 +17,32 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     emailjs.init("zcZFF9cngAtv8T_hf");
 })();
 
+// Email notification helper function
+function sendEmailNotification(toEmail, toName, subject, message, notificationType) {
+    // EmailJS service and template IDs
+    const serviceId = 'service_swmq1iu';
+    const templateId = 'template_nfn2tvk'; // Using existing template
+    
+    const templateParams = {
+        from_name: 'StudySTEM Tutoring',
+        from_email: 'studystem.tutoring@gmail.com',
+        to_email: toEmail,
+        to_name: toName,
+        subject: subject,
+        message: message,
+        notification_type: notificationType || 'general'
+    };
+    
+    return emailjs.send(serviceId, templateId, templateParams)
+        .then(function(response) {
+            console.log('Email notification sent successfully:', response);
+            return true;
+        }, function(error) {
+            console.error('Email notification error:', error);
+            return false;
+        });
+}
+
 // Form submission handling (contact form only)
 document.querySelector('#contact form').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -1077,7 +1103,24 @@ function initTutorFunctions() {
                     
                     try {
                         saveNotes(notes);
-                        alert(`Notes and file uploaded successfully for ${studentName}!`);
+                        
+                        // Send email notification to student
+                        const emailSubject = `New Tutoring Notes: ${title}`;
+                        const emailMessage = `Hello ${studentName},\n\nNew tutoring notes have been uploaded for you!\n\n` +
+                            `Title: ${title}\n` +
+                            `Subject: ${subject}\n` +
+                            `Date: ${new Date().toLocaleDateString()}\n\n` +
+                            `Please log in to your dashboard to view the notes and download the attached file.\n\n` +
+                            `Best regards,\nStudySTEM Tutoring`;
+                        
+                        sendEmailNotification(studentEmail, studentName, emailSubject, emailMessage, 'notes')
+                            .then(sent => {
+                                if (sent) {
+                                    console.log('Email notification sent to student');
+                                }
+                            });
+                        
+                        alert(`Notes and file uploaded successfully for ${studentName}! An email notification has been sent.`);
                         uploadNotesForm.reset();
                         loadStudentDropdown(); // Reset dropdown
                         loadNotes();
@@ -1113,7 +1156,23 @@ function initTutorFunctions() {
                 notes.push(note);
                 saveNotes(notes);
                 
-                alert(`Notes uploaded successfully for ${studentName}!`);
+                // Send email notification to student
+                const emailSubject = `New Tutoring Notes: ${title}`;
+                const emailMessage = `Hello ${studentName},\n\nNew tutoring notes have been uploaded for you!\n\n` +
+                    `Title: ${title}\n` +
+                    `Subject: ${subject}\n` +
+                    `Date: ${new Date().toLocaleDateString()}\n\n` +
+                    `Please log in to your dashboard to view the notes.\n\n` +
+                    `Best regards,\nStudySTEM Tutoring`;
+                
+                sendEmailNotification(studentEmail, studentName, emailSubject, emailMessage, 'notes')
+                    .then(sent => {
+                        if (sent) {
+                            console.log('Email notification sent to student');
+                        }
+                    });
+                
+                alert(`Notes uploaded successfully for ${studentName}! An email notification has been sent.`);
                 uploadNotesForm.reset();
                 loadStudentDropdown(); // Reset dropdown
                 loadNotes();
@@ -1158,7 +1217,34 @@ function initTutorFunctions() {
             events.push(event);
             saveCalendar(events);
             
-            alert(`Event added to calendar successfully for ${studentName}!`);
+            // Send email notification to student
+            const eventDate = new Date(date);
+            const formattedDate = eventDate.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
+            const emailSubject = `New Tutoring Session Scheduled: ${title}`;
+            const emailMessage = `Hello ${studentName},\n\nA new tutoring session has been scheduled for you!\n\n` +
+                `Session Details:\n` +
+                `Title: ${title}\n` +
+                `Date: ${formattedDate}\n` +
+                `Time: ${time}\n` +
+                `Duration: ${duration} minutes\n` +
+                (description ? `Description: ${description}\n` : '') +
+                `\nPlease log in to your dashboard to view all your scheduled sessions.\n\n` +
+                `Best regards,\nStudySTEM Tutoring`;
+            
+            sendEmailNotification(studentEmail, studentName, emailSubject, emailMessage, 'calendar')
+                .then(sent => {
+                    if (sent) {
+                        console.log('Email notification sent to student');
+                    }
+                });
+            
+            alert(`Event added to calendar successfully for ${studentName}! An email notification has been sent.`);
             calendarForm.reset();
             // Reset date to today
             if (eventDateInput) {
