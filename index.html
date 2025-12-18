@@ -305,10 +305,25 @@
                 <!-- Tutor Admin Panel (only for tutors) -->
                 <div id="tutorPanel" class="tutor-panel" style="display: none;">
                     <h3>Tutor Admin Panel</h3>
+                    
+                    <!-- Account Verification Section -->
+                    <div class="admin-section">
+                        <h4>Pending Account Verifications</h4>
+                        <div id="pendingAccountsContainer" class="pending-accounts-container">
+                            <p class="empty-state">No pending account verifications.</p>
+                        </div>
+                    </div>
+                    
                     <div class="admin-grid">
                         <div class="admin-card">
                             <h4>Upload Tutoring Notes</h4>
                             <form id="uploadNotesForm">
+                                <div class="form-group">
+                                    <label for="noteStudent">Send to Student</label>
+                                    <select id="noteStudent" required>
+                                        <option value="">Select a student</option>
+                                    </select>
+                                </div>
                                 <div class="form-group">
                                     <label for="noteTitle">Note Title</label>
                                     <input type="text" id="noteTitle" placeholder="e.g., Physics Chapter 5 - Mechanics" required>
@@ -376,8 +391,16 @@
                 <!-- Calendar Section -->
                 <div class="dashboard-section">
                     <h3>Upcoming Sessions</h3>
-                    <div id="calendarContainer" class="calendar-container">
-                        <p class="empty-state">No upcoming sessions scheduled.</p>
+                    <div class="calendar-view-controls">
+                        <button class="btn btn-secondary" id="prevMonth">← Previous</button>
+                        <h4 id="currentMonthYear"></h4>
+                        <button class="btn btn-secondary" id="nextMonth">Next →</button>
+                    </div>
+                    <div id="calendarView" class="calendar-view">
+                        <!-- Calendar grid will be generated here -->
+                    </div>
+                    <div id="calendarList" class="calendar-list" style="display: none;">
+                        <!-- List view as fallback -->
                     </div>
                 </div>
             </div>

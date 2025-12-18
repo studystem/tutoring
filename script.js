@@ -116,6 +116,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // User Management and Data Storage
 const USER_STORAGE_KEY = 'studystem_user';
+const PENDING_USERS_KEY = 'studystem_pending_users';
+const APPROVED_USERS_KEY = 'studystem_approved_users';
 const NOTES_STORAGE_KEY = 'studystem_notes';
 const CALENDAR_STORAGE_KEY = 'studystem_calendar';
 
@@ -139,12 +141,35 @@ function getStoredCalendar() {
     return calendar ? JSON.parse(calendar) : [];
 }
 
+function getPendingUsers() {
+    const pending = localStorage.getItem(PENDING_USERS_KEY);
+    return pending ? JSON.parse(pending) : [];
+}
+
+function getApprovedUsers() {
+    const approved = localStorage.getItem(APPROVED_USERS_KEY);
+    return approved ? JSON.parse(approved) : [];
+}
+
 function saveNotes(notes) {
     localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
 }
 
 function saveCalendar(events) {
     localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(events));
+}
+
+function savePendingUsers(users) {
+    localStorage.setItem(PENDING_USERS_KEY, JSON.stringify(users));
+}
+
+function saveApprovedUsers(users) {
+    localStorage.setItem(APPROVED_USERS_KEY, JSON.stringify(users));
+}
+
+function isUserApproved(email) {
+    const approved = getApprovedUsers();
+    return approved.some(user => user.email.toLowerCase() === email.toLowerCase());
 }
 
 function getCurrentUser() {
@@ -227,6 +252,10 @@ function updateUIForLoggedInUser(user) {
     setTimeout(function() {
         loadNotes();
         loadCalendar();
+        if (isTutor) {
+            loadPendingAccounts();
+            loadStudentDropdown();
+        }
     }, 100);
 }
 
@@ -358,14 +387,32 @@ function initAuthModal() {
                     submitBtn.disabled = false;
                     return;
                 }
-                // For other users, check if they exist (in a real app, this would check a database)
-                // For now, we'll allow any login for demo purposes
-                user = {
-                    name: email.split('@')[0],
-                    email: email,
-                    userType: userType,
-                    role: 'user'
-                };
+                
+                // Check if user is approved
+                if (!isUserApproved(email)) {
+                    alert('Your account is pending verification. Please wait for the tutor to approve your account. You will be notified once approved.');
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                }
+                
+                // Get approved user info
+                const approved = getApprovedUsers();
+                const approvedUser = approved.find(u => u.email.toLowerCase() === email.toLowerCase());
+                
+                if (approvedUser) {
+                    user = {
+                        name: approvedUser.name,
+                        email: approvedUser.email,
+                        userType: approvedUser.userType,
+                        role: 'user'
+                    };
+                } else {
+                    alert('Account not found. Please sign up first.');
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                }
             }
             
             setTimeout(function() {
@@ -408,7 +455,7 @@ function initAuthModal() {
             e.preventDefault();
             
             const name = document.getElementById('signupName').value;
-            const email = document.getElementById('signupEmail').value;
+            const email = document.getElementById('signupEmail').value.trim().toLowerCase();
             const password = document.getElementById('signupPassword').value;
             const confirmPassword = document.getElementById('signupConfirmPassword').value;
             const userType = document.getElementById('signupUserType').value;
@@ -428,29 +475,41 @@ function initAuthModal() {
                 return;
             }
             
+            // Check if email already exists
+            const pending = getPendingUsers();
+            const approved = getApprovedUsers();
+            if (pending.some(u => u.email.toLowerCase() === email) || 
+                approved.some(u => u.email.toLowerCase() === email)) {
+                alert('An account with this email already exists. Please log in instead.');
+                return;
+            }
+            
             const submitBtn = this.querySelector('button[type="submit"]');
             const originalText = submitBtn.textContent;
             submitBtn.textContent = 'Creating account...';
             submitBtn.disabled = true;
             
             setTimeout(function() {
-                const user = {
+                // Create pending account
+                const pendingUser = {
                     name: name,
                     email: email,
+                    password: password, // In production, this should be hashed
                     userType: userType,
-                    role: 'user'
+                    role: 'user',
+                    createdAt: new Date().toISOString()
                 };
                 
-                setCurrentUser(user);
-                updateUIForLoggedInUser(user);
+                pending.push(pendingUser);
+                savePendingUsers(pending);
+                
                 modal.style.display = 'none';
                 document.body.style.overflow = 'auto';
                 signupFormElement.reset();
                 submitBtn.textContent = originalText;
                 submitBtn.disabled = false;
                 
-                alert(`Account created successfully! Welcome, ${name}!`);
-                document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+                alert(`Account created successfully! Your account is pending verification by the tutor. You will be able to log in once your account is approved.`);
             }, 500);
         });
     }
@@ -469,24 +528,120 @@ function initAuthModal() {
     }
 }
 
-// Notes Management
+// Account Verification Management
+function loadPendingAccounts() {
+    const pending = getPendingUsers();
+    const container = document.getElementById('pendingAccountsContainer');
+    if (!container) return;
+    
+    if (pending.length === 0) {
+        container.innerHTML = '<p class="empty-state">No pending account verifications.</p>';
+        return;
+    }
+    
+    container.innerHTML = pending.map((user, index) => {
+        const date = new Date(user.createdAt).toLocaleDateString();
+        return `
+            <div class="pending-account-card">
+                <div class="pending-account-info">
+                    <h5>${user.name}</h5>
+                    <p><strong>Email:</strong> ${user.email}</p>
+                    <p><strong>Type:</strong> ${user.userType.charAt(0).toUpperCase() + user.userType.slice(1)}</p>
+                    <p><strong>Requested:</strong> ${date}</p>
+                </div>
+                <div class="account-actions">
+                    <button class="btn-approve" onclick="approveAccount(${index})">Approve</button>
+                    <button class="btn-reject" onclick="rejectAccount(${index})">Reject</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+window.approveAccount = function(index) {
+    const pending = getPendingUsers();
+    const approved = getApprovedUsers();
+    
+    if (index >= 0 && index < pending.length) {
+        const user = pending[index];
+        // Remove password before saving to approved (in production, never store passwords)
+        const { password, ...userWithoutPassword } = user;
+        approved.push(userWithoutPassword);
+        pending.splice(index, 1);
+        
+        saveApprovedUsers(approved);
+        savePendingUsers(pending);
+        
+        loadPendingAccounts();
+        loadStudentDropdown();
+        alert(`Account for ${user.name} has been approved!`);
+    }
+};
+
+window.rejectAccount = function(index) {
+    const pending = getPendingUsers();
+    
+    if (index >= 0 && index < pending.length) {
+        const user = pending[index];
+        if (confirm(`Are you sure you want to reject the account for ${user.name}?`)) {
+            pending.splice(index, 1);
+            savePendingUsers(pending);
+            loadPendingAccounts();
+            alert(`Account for ${user.name} has been rejected.`);
+        }
+    }
+};
+
+function loadStudentDropdown() {
+    const approved = getApprovedUsers();
+    const studentSelect = document.getElementById('noteStudent');
+    if (!studentSelect) return;
+    
+    // Filter to only students (not parents)
+    const students = approved.filter(u => u.userType === 'student');
+    
+    studentSelect.innerHTML = '<option value="">Select a student</option>' +
+        students.map(student => 
+            `<option value="${student.email}">${student.name} (${student.email})</option>`
+        ).join('');
+}
+
+// Notes Management (Student-Specific)
 function loadNotes() {
     const notes = getStoredNotes();
     const container = document.getElementById('notesContainer');
     if (!container) return;
     
-    if (notes.length === 0) {
+    const user = getCurrentUser();
+    if (!user) return;
+    
+    // Filter notes based on user role
+    let filteredNotes = [];
+    if (user.role === 'admin') {
+        // Tutors see all notes
+        filteredNotes = notes;
+    } else {
+        // Students/parents only see their own notes
+        filteredNotes = notes.filter(note => note.studentEmail === user.email);
+    }
+    
+    if (filteredNotes.length === 0) {
         container.innerHTML = '<p class="empty-state">No notes available yet. Check back soon!</p>';
         return;
     }
     
     // Sort notes by date (newest first)
-    notes.sort((a, b) => new Date(b.date) - new Date(a.date));
+    filteredNotes.sort((a, b) => new Date(b.date) - new Date(a.date));
     
-    container.innerHTML = notes.map((note, index) => {
+    container.innerHTML = filteredNotes.map((note, noteIndex) => {
+        // Find original index for deletion
+        const originalIndex = notes.findIndex(n => n === note);
         const user = getCurrentUser();
         const deleteBtn = (user && user.role === 'admin') ? 
-            `<button class="delete-btn" onclick="deleteNote(${index})">Delete Note</button>` : '';
+            `<button class="delete-btn" onclick="deleteNote(${originalIndex})">Delete Note</button>` : '';
+        
+        const studentInfo = user.role === 'admin' && note.studentEmail ? 
+            `<span>Student: ${note.studentName || note.studentEmail}</span>` : '';
         
         return `
             <div class="note-card">
@@ -494,6 +649,7 @@ function loadNotes() {
                 <div class="note-meta">
                     <span>Subject: ${note.subject}</span>
                     <span>Date: ${new Date(note.date).toLocaleDateString()}</span>
+                    ${studentInfo}
                 </div>
                 <div class="note-content">${note.content}</div>
                 ${deleteBtn}
@@ -512,14 +668,128 @@ window.deleteNote = function(index) {
     }
 };
 
-// Calendar Management
+// Calendar Management with Google Calendar-style view
+let currentCalendarDate = new Date();
+
 function loadCalendar() {
     const events = getStoredCalendar();
-    const container = document.getElementById('calendarContainer');
-    if (!container) return;
+    const calendarView = document.getElementById('calendarView');
+    const calendarList = document.getElementById('calendarList');
+    const monthYear = document.getElementById('currentMonthYear');
+    
+    if (!calendarView) return;
+    
+    // Update month/year display
+    if (monthYear) {
+        const options = { year: 'numeric', month: 'long' };
+        monthYear.textContent = currentCalendarDate.toLocaleDateString('en-US', options);
+    }
+    
+    // Generate calendar grid
+    renderCalendarGrid(events, currentCalendarDate);
+    
+    // Also update list view as fallback
+    if (calendarList) {
+        renderCalendarList(events);
+    }
+}
+
+function renderCalendarGrid(events, date) {
+    const calendarView = document.getElementById('calendarView');
+    if (!calendarView) return;
+    
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    
+    // Get first day of month and number of days
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    // Get previous month's days to fill the grid
+    const prevMonth = new Date(year, month, 0);
+    const daysInPrevMonth = prevMonth.getDate();
+    
+    // Day headers
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    let html = '<div class="calendar-header">';
+    dayNames.forEach(day => {
+        html += `<div class="calendar-day-header">${day}</div>`;
+    });
+    html += '</div><div class="calendar-grid">';
+    
+    // Previous month's trailing days
+    for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+        const day = daysInPrevMonth - i;
+        html += `<div class="calendar-day other-month">
+            <div class="calendar-day-number">${day}</div>
+        </div>`;
+    }
+    
+    // Current month's days
+    const today = new Date();
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const isToday = today.getFullYear() === year && 
+                       today.getMonth() === month && 
+                       today.getDate() === day;
+        
+        // Get events for this day
+        const dayEvents = events.filter(e => e.date === dateStr);
+        
+        html += `<div class="calendar-day ${isToday ? 'today' : ''}">
+            <div class="calendar-day-number">${day}</div>`;
+        
+        dayEvents.forEach((event, eventIndex) => {
+            const eventTime = event.time || 'All Day';
+            html += `<div class="calendar-event-item" 
+                          title="${event.title} - ${eventTime} (${event.duration} min)"
+                          onclick="showEventDetails('${event.title}', '${event.date}', '${event.time}', '${event.duration}', '${event.description || ''}')">
+                ${event.title} - ${eventTime}
+            </div>`;
+        });
+        
+        html += '</div>';
+    }
+    
+    // Next month's leading days to complete the grid
+    const totalCells = startingDayOfWeek + daysInMonth;
+    const remainingCells = 42 - totalCells; // 6 rows * 7 days
+    for (let day = 1; day <= remainingCells && day <= 14; day++) {
+        html += `<div class="calendar-day other-month">
+            <div class="calendar-day-number">${day}</div>
+        </div>`;
+    }
+    
+    html += '</div>';
+    calendarView.innerHTML = html;
+    
+    // Add navigation handlers
+    const prevBtn = document.getElementById('prevMonth');
+    const nextBtn = document.getElementById('nextMonth');
+    
+    if (prevBtn) {
+        prevBtn.onclick = function() {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
+            loadCalendar();
+        };
+    }
+    
+    if (nextBtn) {
+        nextBtn.onclick = function() {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
+            loadCalendar();
+        };
+    }
+}
+
+function renderCalendarList(events) {
+    const calendarList = document.getElementById('calendarList');
+    if (!calendarList) return;
     
     if (events.length === 0) {
-        container.innerHTML = '<p class="empty-state">No upcoming sessions scheduled.</p>';
+        calendarList.innerHTML = '<p class="empty-state">No upcoming sessions scheduled.</p>';
         return;
     }
     
@@ -530,7 +800,7 @@ function loadCalendar() {
         return dateA - dateB;
     });
     
-    container.innerHTML = events.map((event, index) => {
+    calendarList.innerHTML = events.map((event, index) => {
         const user = getCurrentUser();
         const deleteBtn = (user && user.role === 'admin') ? 
             `<button class="delete-btn" onclick="deleteEvent(${index})">Delete Event</button>` : '';
@@ -552,6 +822,15 @@ function loadCalendar() {
         `;
     }).join('');
 }
+
+window.showEventDetails = function(title, date, time, duration, description) {
+    const dateStr = new Date(date).toLocaleDateString();
+    let details = `Event: ${title}\nDate: ${dateStr}\nTime: ${time}\nDuration: ${duration} minutes`;
+    if (description) {
+        details += `\n\nDescription: ${description}`;
+    }
+    alert(details);
+};
 
 window.deleteEvent = function(index) {
     if (confirm('Are you sure you want to delete this event?')) {
@@ -577,17 +856,25 @@ function initTutorFunctions() {
         uploadNotesForm.addEventListener('submit', function(e) {
             e.preventDefault();
             
+            const studentEmail = document.getElementById('noteStudent').value;
             const title = document.getElementById('noteTitle').value;
             const subject = document.getElementById('noteSubject').value;
             const content = document.getElementById('noteContent').value;
             const file = document.getElementById('noteFile').files[0];
             
-            if (!title || !subject || !content) {
-                alert('Please fill in all required fields.');
+            if (!studentEmail || !title || !subject || !content) {
+                alert('Please fill in all required fields, including selecting a student.');
                 return;
             }
             
+            // Get student name
+            const approved = getApprovedUsers();
+            const student = approved.find(u => u.email === studentEmail);
+            const studentName = student ? student.name : studentEmail;
+            
             const note = {
+                studentEmail: studentEmail,
+                studentName: studentName,
                 title: title,
                 subject: subject,
                 content: content,
@@ -599,8 +886,9 @@ function initTutorFunctions() {
             notes.push(note);
             saveNotes(notes);
             
-            alert('Notes uploaded successfully!');
+            alert(`Notes uploaded successfully for ${studentName}!`);
             uploadNotesForm.reset();
+            loadStudentDropdown(); // Reset dropdown
             loadNotes();
         });
     }
