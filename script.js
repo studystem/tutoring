@@ -1,3 +1,19 @@
+// User Management and Data Storage - MUST BE DEFINED FIRST
+const USER_STORAGE_KEY = 'studystem_user';
+const PENDING_USERS_KEY = 'studystem_pending_users';
+const APPROVED_USERS_KEY = 'studystem_approved_users';
+const NOTES_STORAGE_KEY = 'studystem_notes';
+const CALENDAR_STORAGE_KEY = 'studystem_calendar';
+
+// Special tutor account
+const TUTOR_ACCOUNT = {
+    name: 'Sophia Phelps',
+    email: 'phelpssophia@icloud.com',
+    password: 'Ilikederp123!',
+    userType: 'tutor',
+    role: 'admin'
+};
+
 // Smooth scrolling for navigation links (only for anchor links, not external pages)
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -54,7 +70,9 @@ function sendEmailNotification(toEmail, toName, subject, message, notificationTy
 }
 
 // Form submission handling (contact form only)
-document.querySelector('#contact form').addEventListener('submit', function(e) {
+const contactForm = document.querySelector('#contact form');
+if (contactForm) {
+    contactForm.addEventListener('submit', function(e) {
     e.preventDefault();
     
     // Get form data
@@ -100,7 +118,8 @@ document.querySelector('#contact form').addEventListener('submit', function(e) {
             submitBtn.textContent = originalText;
             submitBtn.disabled = false;
         });
-});
+    });
+}
 
 // Add scroll effect to navbar
 window.addEventListener('scroll', function() {
@@ -149,22 +168,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Check if user is already logged in
     checkAuthStatus();
 });
-
-// User Management and Data Storage
-const USER_STORAGE_KEY = 'studystem_user';
-const PENDING_USERS_KEY = 'studystem_pending_users';
-const APPROVED_USERS_KEY = 'studystem_approved_users';
-const NOTES_STORAGE_KEY = 'studystem_notes';
-const CALENDAR_STORAGE_KEY = 'studystem_calendar';
-
-// Special tutor account
-const TUTOR_ACCOUNT = {
-    name: 'Sophia Phelps',
-    email: 'phelpssophia@icloud.com',
-    password: 'Ilikederp123!',
-    userType: 'tutor',
-    role: 'admin'
-};
 
 // Get stored data
 function getStoredNotes() {
