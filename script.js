@@ -17,8 +17,8 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     emailjs.init("zcZFF9cngAtv8T_hf");
 })();
 
-// Form submission handling
-document.querySelector('form').addEventListener('submit', function(e) {
+// Form submission handling (contact form only)
+document.querySelector('#contact form').addEventListener('submit', function(e) {
     e.preventDefault();
     
     // Get form data
@@ -103,4 +103,151 @@ document.addEventListener('DOMContentLoaded', function() {
         el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
         observer.observe(el);
     });
+    
+    // Initialize authentication modal
+    initAuthModal();
 });
+
+// Authentication Modal Functionality
+function initAuthModal() {
+    const modal = document.getElementById('authModal');
+    const loginBtn = document.getElementById('loginBtn');
+    const closeBtn = document.querySelector('.close');
+    const loginTab = document.getElementById('loginTab');
+    const signupTab = document.getElementById('signupTab');
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+    const loginFormElement = document.getElementById('loginFormElement');
+    const signupFormElement = document.getElementById('signupFormElement');
+    
+    // Open modal
+    if (loginBtn) {
+        loginBtn.addEventListener('click', function() {
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        });
+    }
+    
+    // Close modal
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        });
+    }
+    
+    // Close modal when clicking outside
+    window.addEventListener('click', function(event) {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    });
+    
+    // Tab switching
+    if (loginTab) {
+        loginTab.addEventListener('click', function() {
+            loginTab.classList.add('active');
+            signupTab.classList.remove('active');
+            loginForm.classList.add('active');
+            signupForm.classList.remove('active');
+        });
+    }
+    
+    if (signupTab) {
+        signupTab.addEventListener('click', function() {
+            signupTab.classList.add('active');
+            loginTab.classList.remove('active');
+            signupForm.classList.add('active');
+            loginForm.classList.remove('active');
+        });
+    }
+    
+    // Login form submission
+    if (loginFormElement) {
+        loginFormElement.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const userType = document.getElementById('loginUserType').value;
+            
+            if (!email || !password || !userType) {
+                alert('Please fill in all fields.');
+                return;
+            }
+            
+            // Simulate login (in a real app, this would connect to a backend)
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Logging in...';
+            submitBtn.disabled = true;
+            
+            // Simulate API call
+            setTimeout(function() {
+                alert(`Welcome back! You are logged in as a ${userType}.`);
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+                loginFormElement.reset();
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+                
+                // Update login button to show user is logged in
+                if (loginBtn) {
+                    loginBtn.textContent = `${userType.charAt(0).toUpperCase() + userType.slice(1)} Account`;
+                    loginBtn.style.background = '#e0e7ff';
+                }
+            }, 1000);
+        });
+    }
+    
+    // Signup form submission
+    if (signupFormElement) {
+        signupFormElement.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('signupName').value;
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            const confirmPassword = document.getElementById('signupConfirmPassword').value;
+            const userType = document.getElementById('signupUserType').value;
+            
+            if (!name || !email || !password || !confirmPassword || !userType) {
+                alert('Please fill in all fields.');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                alert('Passwords do not match. Please try again.');
+                return;
+            }
+            
+            if (password.length < 6) {
+                alert('Password must be at least 6 characters long.');
+                return;
+            }
+            
+            // Simulate signup (in a real app, this would connect to a backend)
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Creating account...';
+            submitBtn.disabled = true;
+            
+            // Simulate API call
+            setTimeout(function() {
+                alert(`Account created successfully! Welcome, ${name}! You are registered as a ${userType}.`);
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+                signupFormElement.reset();
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+                
+                // Update login button to show user is logged in
+                if (loginBtn) {
+                    loginBtn.textContent = `${userType.charAt(0).toUpperCase() + userType.slice(1)} Account`;
+                    loginBtn.style.background = '#e0e7ff';
+                }
+            }, 1000);
+        });
+    }
+}
