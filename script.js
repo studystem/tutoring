@@ -5,14 +5,31 @@ const APPROVED_USERS_KEY = 'studystem_approved_users';
 const NOTES_STORAGE_KEY = 'studystem_notes';
 const CALENDAR_STORAGE_KEY = 'studystem_calendar';
 
-// Special tutor account
-const TUTOR_ACCOUNT = {
-    name: 'Sophia Phelps',
-    email: 'phelpssophia@icloud.com',
-    password: 'Ilikederp123!',
-    userType: 'tutor',
-    role: 'admin'
-};
+// Special tutor accounts
+const TUTOR_ACCOUNTS = [
+    {
+        name: 'Sophia Phelps',
+        email: 'phelpssophia@icloud.com',
+        password: 'Ilikederp123!',
+        userType: 'tutor',
+        role: 'admin'
+    },
+    {
+        name: 'Aditya Pillai',
+        email: 'adityaxpillai@gmail.com',
+        password: 'aditya376',
+        userType: 'tutor',
+        role: 'admin'
+    }
+];
+
+// Helper function to find tutor account
+function findTutorAccount(email, password) {
+    return TUTOR_ACCOUNTS.find(tutor => 
+        tutor.email.toLowerCase() === email.toLowerCase() && 
+        tutor.password === password
+    );
+}
 
 // Smooth scrolling for navigation links (only for anchor links, not external pages)
 document.addEventListener('DOMContentLoaded', function() {
@@ -479,12 +496,13 @@ function initAuthModal() {
             submitBtn.textContent = 'Logging in...';
             submitBtn.disabled = true;
             
-            // Check if it's the tutor account
+            // Check if it's a tutor account
             let user = null;
-            if (email === TUTOR_ACCOUNT.email.toLowerCase() && password === TUTOR_ACCOUNT.password) {
+            const tutorAccount = findTutorAccount(email, password);
+            if (tutorAccount) {
                 user = {
-                    name: TUTOR_ACCOUNT.name,
-                    email: TUTOR_ACCOUNT.email,
+                    name: tutorAccount.name,
+                    email: tutorAccount.email,
                     userType: 'tutor',
                     role: 'admin'
                 };
