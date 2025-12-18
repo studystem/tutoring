@@ -595,15 +595,22 @@ window.rejectAccount = function(index) {
 function loadStudentDropdown() {
     const approved = getApprovedUsers();
     const studentSelect = document.getElementById('noteStudent');
-    if (!studentSelect) return;
+    const eventStudentSelect = document.getElementById('eventStudent');
     
     // Filter to only students (not parents)
     const students = approved.filter(u => u.userType === 'student');
-    
-    studentSelect.innerHTML = '<option value="">Select a student</option>' +
+    const studentOptions = '<option value="">Select a student</option>' +
         students.map(student => 
             `<option value="${student.email}">${student.name} (${student.email})</option>`
         ).join('');
+    
+    if (studentSelect) {
+        studentSelect.innerHTML = studentOptions;
+    }
+    
+    if (eventStudentSelect) {
+        eventStudentSelect.innerHTML = studentOptions;
+    }
 }
 
 // Notes Management (Student-Specific)
@@ -651,16 +658,25 @@ function loadNotes() {
         // File download button
         let fileDownloadBtn = '';
         if (note.file) {
-            if (note.file.name && note.file.data) {
-                // New format with file data
+            // Check if file has data (new format with base64 data)
+            if (typeof note.file === 'object' && note.file.data && note.file.data.length > 0) {
+                // New format with file data - always show download button
+                const fileName = note.file.name || 'download';
+                const fileSize = note.file.size ? formatFileSize(note.file.size) : '';
                 fileDownloadBtn = `
                     <a href="#" class="btn-download" onclick="downloadNoteFile(${originalIndex}); return false;">
-                        📎 Download: ${note.file.name} (${formatFileSize(note.file.size)})
+                        📎 Download: ${fileName}${fileSize ? ' (' + fileSize + ')' : ''}
                     </a>
                 `;
             } else if (typeof note.file === 'string') {
-                // Legacy format (just filename)
+                // Legacy format (just filename) - show message but no download
                 fileDownloadBtn = `<p style="color: #6b46c1; margin-top: 0.5rem;">📎 File: ${note.file} (file not available for download)</p>`;
+            } else if (typeof note.file === 'object' && note.file.name && !note.file.data) {
+                // File object exists but no data - might be corrupted
+                fileDownloadBtn = `<p style="color: #ef4444; margin-top: 0.5rem;">📎 File: ${note.file.name} (file data missing - please re-upload)</p>`;
+            } else {
+                // Unknown file format
+                console.warn('Unknown file format in note:', note.file);
             }
         }
         
@@ -693,30 +709,61 @@ window.deleteNote = function(index) {
 // File download function
 window.downloadNoteFile = function(noteIndex) {
     const notes = getStoredNotes();
-    if (noteIndex >= 0 && noteIndex < notes.length) {
-        const note = notes[noteIndex];
-        if (note.file && note.file.data) {
-            // Create a blob from the base64 data
-            const byteCharacters = atob(note.file.data.split(',')[1]);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: note.file.type });
-            
-            // Create download link
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = note.file.name;
-            document.body.appendChild(a);
-            a.click();
+    if (noteIndex < 0 || noteIndex >= notes.length) {
+        alert('Note not found.');
+        return;
+    }
+    
+    const note = notes[noteIndex];
+    
+    if (!note.file) {
+        alert('No file attached to this note.');
+        return;
+    }
+    
+    if (!note.file.data) {
+        alert('File data is missing. The file cannot be downloaded.');
+        return;
+    }
+    
+    try {
+        // Handle base64 data URL format (data:type/subtype;base64,...)
+        let base64Data = note.file.data;
+        
+        // If it's already a data URL, extract the base64 part
+        if (base64Data.includes(',')) {
+            base64Data = base64Data.split(',')[1];
+        }
+        
+        // Decode base64 to binary
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        
+        // Create blob with proper MIME type
+        const mimeType = note.file.type || 'application/octet-stream';
+        const blob = new Blob([byteArray], { type: mimeType });
+        
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = note.file.name || 'download';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        
+        // Cleanup
+        setTimeout(function() {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        } else {
-            alert('File not available for download.');
-        }
+        }, 100);
+    } catch (error) {
+        console.error('Error downloading file:', error);
+        alert('Error downloading file. Please try again or contact support.');
     }
 };
 
@@ -733,12 +780,24 @@ function formatFileSize(bytes) {
 let currentCalendarDate = new Date();
 
 function loadCalendar() {
-    const events = getStoredCalendar();
+    const allEvents = getStoredCalendar();
     const calendarView = document.getElementById('calendarView');
     const calendarList = document.getElementById('calendarList');
     const monthYear = document.getElementById('currentMonthYear');
     
     if (!calendarView) return;
+    
+    // Filter events based on user role
+    const user = getCurrentUser();
+    let events = [];
+    
+    if (user && user.role === 'admin') {
+        // Tutors see all events
+        events = allEvents;
+    } else if (user) {
+        // Students/parents only see their own events
+        events = allEvents.filter(event => event.studentEmail === user.email);
+    }
     
     // Update month/year display
     if (monthYear) {
@@ -747,17 +806,20 @@ function loadCalendar() {
     }
     
     // Generate calendar grid
-    renderCalendarGrid(events, currentCalendarDate);
+    renderCalendarGrid(events, currentCalendarDate, allEvents);
     
     // Also update list view as fallback
     if (calendarList) {
-        renderCalendarList(events);
+        renderCalendarList(events, allEvents);
     }
 }
 
-function renderCalendarGrid(events, date) {
+function renderCalendarGrid(events, date, allEvents) {
     const calendarView = document.getElementById('calendarView');
     if (!calendarView) return;
+    
+    const user = getCurrentUser();
+    const isAdmin = user && user.role === 'admin';
     
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -802,12 +864,26 @@ function renderCalendarGrid(events, date) {
         html += `<div class="calendar-day ${isToday ? 'today' : ''}">
             <div class="calendar-day-number">${day}</div>`;
         
-        dayEvents.forEach((event, eventIndex) => {
+        dayEvents.forEach((event) => {
+            // Find original index in allEvents for deletion
+            const originalIndex = allEvents.findIndex(e => 
+                e.title === event.title && 
+                e.date === event.date && 
+                e.time === event.time &&
+                e.studentEmail === event.studentEmail
+            );
+            
             const eventTime = event.time || 'All Day';
-            html += `<div class="calendar-event-item" 
-                          title="${event.title} - ${eventTime} (${event.duration} min)"
-                          onclick="showEventDetails('${event.title}', '${event.date}', '${event.time}', '${event.duration}', '${event.description || ''}')">
-                ${event.title} - ${eventTime}
+            const deleteBtn = isAdmin ? 
+                `<button class="delete-event-btn" onclick="deleteEvent(${originalIndex}); return false;" title="Delete event">×</button>` : '';
+            
+            html += `<div class="calendar-event-item-wrapper">
+                <div class="calendar-event-item" 
+                     title="${event.title} - ${eventTime} (${event.duration} min)"
+                     onclick="showEventDetails('${event.title}', '${event.date}', '${event.time}', '${event.duration}', '${event.description || ''}', '${event.studentName || event.studentEmail || ''}')">
+                    ${event.title} - ${eventTime}
+                </div>
+                ${deleteBtn}
             </div>`;
         });
         
@@ -845,7 +921,7 @@ function renderCalendarGrid(events, date) {
     }
 }
 
-function renderCalendarList(events) {
+function renderCalendarList(events, allEvents) {
     const calendarList = document.getElementById('calendarList');
     if (!calendarList) return;
     
@@ -854,6 +930,9 @@ function renderCalendarList(events) {
         return;
     }
     
+    const user = getCurrentUser();
+    const isAdmin = user && user.role === 'admin';
+    
     // Sort events by date
     events.sort((a, b) => {
         const dateA = new Date(a.date + 'T' + a.time);
@@ -861,13 +940,23 @@ function renderCalendarList(events) {
         return dateA - dateB;
     });
     
-    calendarList.innerHTML = events.map((event, index) => {
-        const user = getCurrentUser();
-        const deleteBtn = (user && user.role === 'admin') ? 
-            `<button class="delete-btn" onclick="deleteEvent(${index})">Delete Event</button>` : '';
+    calendarList.innerHTML = events.map((event) => {
+        // Find original index in allEvents for deletion
+        const originalIndex = allEvents.findIndex(e => 
+            e.title === event.title && 
+            e.date === event.date && 
+            e.time === event.time &&
+            e.studentEmail === event.studentEmail
+        );
+        
+        const deleteBtn = isAdmin ? 
+            `<button class="delete-btn" onclick="deleteEvent(${originalIndex})">Delete Event</button>` : '';
         
         const eventDate = new Date(event.date + 'T' + event.time);
         const isPast = eventDate < new Date();
+        
+        const studentInfo = isAdmin && event.studentName ? 
+            `<span>Student: ${event.studentName}</span>` : '';
         
         return `
             <div class="calendar-event" style="${isPast ? 'opacity: 0.7;' : ''}">
@@ -876,6 +965,7 @@ function renderCalendarList(events) {
                     <span>📅 ${new Date(event.date).toLocaleDateString()}</span>
                     <span>🕐 ${event.time}</span>
                     <span>⏱️ ${event.duration} minutes</span>
+                    ${studentInfo}
                 </div>
                 ${event.description ? `<div class="event-description">${event.description}</div>` : ''}
                 ${deleteBtn}
@@ -884,9 +974,12 @@ function renderCalendarList(events) {
     }).join('');
 }
 
-window.showEventDetails = function(title, date, time, duration, description) {
+window.showEventDetails = function(title, date, time, duration, description, studentName) {
     const dateStr = new Date(date).toLocaleDateString();
     let details = `Event: ${title}\nDate: ${dateStr}\nTime: ${time}\nDuration: ${duration} minutes`;
+    if (studentName) {
+        details += `\nStudent: ${studentName}`;
+    }
     if (description) {
         details += `\n\nDescription: ${description}`;
     }
@@ -896,9 +989,14 @@ window.showEventDetails = function(title, date, time, duration, description) {
 window.deleteEvent = function(index) {
     if (confirm('Are you sure you want to delete this event?')) {
         const events = getStoredCalendar();
-        events.splice(index, 1);
-        saveCalendar(events);
-        loadCalendar();
+        if (index >= 0 && index < events.length) {
+            events.splice(index, 1);
+            saveCalendar(events);
+            loadCalendar();
+            alert('Event deleted successfully!');
+        } else {
+            alert('Error: Event not found.');
+        }
     }
 };
 
@@ -944,12 +1042,25 @@ function initTutorFunctions() {
                 
                 const reader = new FileReader();
                 reader.onload = function(e) {
+                    const fileDataUrl = e.target.result;
+                    
+                    // Validate that we got the file data
+                    if (!fileDataUrl || fileDataUrl.length === 0) {
+                        alert('Error: File data could not be read. Please try again.');
+                        return;
+                    }
+                    
                     const fileData = {
                         name: file.name,
-                        type: file.type,
+                        type: file.type || 'application/octet-stream',
                         size: file.size,
-                        data: e.target.result // Base64 encoded file
+                        data: fileDataUrl // Base64 encoded file (data URL format)
                     };
+                    
+                    // Verify data URL format
+                    if (!fileDataUrl.startsWith('data:')) {
+                        console.warn('File data URL format unexpected:', fileDataUrl.substring(0, 50));
+                    }
                     
                     const note = {
                         studentEmail: studentEmail,
@@ -963,16 +1074,26 @@ function initTutorFunctions() {
                     
                     const notes = getStoredNotes();
                     notes.push(note);
-                    saveNotes(notes);
                     
-                    alert(`Notes and file uploaded successfully for ${studentName}!`);
-                    uploadNotesForm.reset();
-                    loadStudentDropdown(); // Reset dropdown
-                    loadNotes();
+                    try {
+                        saveNotes(notes);
+                        alert(`Notes and file uploaded successfully for ${studentName}!`);
+                        uploadNotesForm.reset();
+                        loadStudentDropdown(); // Reset dropdown
+                        loadNotes();
+                    } catch (error) {
+                        console.error('Error saving notes:', error);
+                        if (error.name === 'QuotaExceededError') {
+                            alert('Error: File is too large or storage is full. Please try a smaller file.');
+                        } else {
+                            alert('Error saving notes. Please try again.');
+                        }
+                    }
                 };
                 
-                reader.onerror = function() {
-                    alert('Error reading file. Please try again.');
+                reader.onerror = function(error) {
+                    console.error('FileReader error:', error);
+                    alert('Error reading file. Please try again or choose a different file.');
                 };
                 
                 reader.readAsDataURL(file);
@@ -1006,18 +1127,26 @@ function initTutorFunctions() {
         calendarForm.addEventListener('submit', function(e) {
             e.preventDefault();
             
+            const studentEmail = document.getElementById('eventStudent').value;
             const title = document.getElementById('eventTitle').value;
             const date = document.getElementById('eventDate').value;
             const time = document.getElementById('eventTime').value;
             const duration = document.getElementById('eventDuration').value;
             const description = document.getElementById('eventDescription').value;
             
-            if (!title || !date || !time || !duration) {
-                alert('Please fill in all required fields.');
+            if (!studentEmail || !title || !date || !time || !duration) {
+                alert('Please fill in all required fields, including selecting a student.');
                 return;
             }
             
+            // Get student name
+            const approved = getApprovedUsers();
+            const student = approved.find(u => u.email === studentEmail);
+            const studentName = student ? student.name : studentEmail;
+            
             const event = {
+                studentEmail: studentEmail,
+                studentName: studentName,
                 title: title,
                 date: date,
                 time: time,
@@ -1029,13 +1158,14 @@ function initTutorFunctions() {
             events.push(event);
             saveCalendar(events);
             
-            alert('Event added to calendar successfully!');
+            alert(`Event added to calendar successfully for ${studentName}!`);
             calendarForm.reset();
             // Reset date to today
             if (eventDateInput) {
                 const today = new Date().toISOString().split('T')[0];
                 eventDateInput.value = today;
             }
+            loadStudentDropdown(); // Reset dropdown
             loadCalendar();
         });
     }
