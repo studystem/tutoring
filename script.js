@@ -1,18 +1,22 @@
 // Smooth scrolling for navigation links (only for anchor links, not external pages)
 document.addEventListener('DOMContentLoaded', function() {
-document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function (e) {
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        // Skip dashboard links
+        if (anchor.id === 'dashboardNavLink' || anchor.href.includes('dashboard.html')) {
+            return;
+        }
+        anchor.addEventListener('click', function (e) {
             // Only handle anchor links, not page links
             const href = this.getAttribute('href');
-            if (href && href.startsWith('#') && !href.includes('dashboard.html')) {
-        e.preventDefault();
+            if (href && href.startsWith('#')) {
+                e.preventDefault();
                 const target = document.querySelector(href);
-        if (target) {
-            target.scrollIntoView({
-                behavior: 'smooth',
-                block: 'start'
-            });
-        }
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
             }
         });
     });
@@ -247,8 +251,42 @@ function updateUIForLoggedInUser(user) {
     
     // Show dashboard link in navigation - simple approach, just show/hide
     const dashboardNavItem = document.getElementById('dashboardNavItem');
-    if (dashboardNavItem) {
+    const dashboardNavLink = document.getElementById('dashboardNavLink');
+    
+    if (dashboardNavItem && dashboardNavLink) {
         dashboardNavItem.style.display = 'list-item';
+        // Set all properties to ensure link is visible and clickable
+        dashboardNavLink.href = 'dashboard.html';
+        dashboardNavLink.setAttribute('href', 'dashboard.html');
+        dashboardNavLink.style.display = 'inline';
+        dashboardNavLink.style.visibility = 'visible';
+        dashboardNavLink.style.pointerEvents = 'auto';
+        dashboardNavLink.style.cursor = 'pointer';
+        dashboardNavLink.style.color = 'white';
+        dashboardNavLink.style.textDecoration = 'none';
+        
+        // Remove any existing onclick handlers first
+        dashboardNavLink.onclick = null;
+        
+        // Add explicit click handler that navigates
+        dashboardNavLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Dashboard link clicked - navigating to dashboard.html');
+            // Verify user is still logged in before navigating
+            const currentUser = getCurrentUser();
+            if (!currentUser) {
+                console.error('User not logged in!');
+                alert('You are not logged in. Please log in first.');
+                return false;
+            }
+            console.log('User is logged in, navigating:', currentUser);
+            window.location.href = 'dashboard.html';
+            return false;
+        }, { once: false });
+        
+        console.log('Dashboard link configured and ready');
+        console.log('Dashboard link shown:', dashboardNavLink.href);
     } else if (navMenu) {
         // Fallback: create link dynamically if HTML element doesn't exist
         const existingLink = navMenu.querySelector('#dashboardNavLink') || navMenu.querySelector('a[href="dashboard.html"]');
@@ -259,13 +297,18 @@ function updateUIForLoggedInUser(user) {
             dashboardLink.id = 'dashboardNavLink';
             dashboardLink.href = 'dashboard.html';
             dashboardLink.textContent = 'Dashboard';
+            dashboardLink.style.pointerEvents = 'auto';
+            dashboardLink.style.cursor = 'pointer';
             dashboardLi.appendChild(dashboardLink);
             navMenu.insertBefore(dashboardLi, navMenu.lastElementChild);
+            console.log('Dashboard link created dynamically');
         } else {
             const li = existingLink.closest('li');
             if (li) {
                 li.id = 'dashboardNavItem';
                 li.style.display = 'list-item';
+                existingLink.style.pointerEvents = 'auto';
+                existingLink.style.cursor = 'pointer';
             }
         }
     }
@@ -337,8 +380,9 @@ function updateUIForLoggedOut() {
 let authModalInitialized = false;
 
 function initAuthModal() {
-    // Prevent multiple initializations
-    if (authModalInitialized) {
+    // Prevent multiple initializations - but allow re-initialization on dashboard page
+    const isDashboardPage = window.location.pathname.includes('dashboard.html');
+    if (authModalInitialized && !isDashboardPage) {
         return;
     }
     authModalInitialized = true;
