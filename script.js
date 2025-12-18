@@ -244,20 +244,28 @@ function updateUIForLoggedInUser(user) {
     
     // Add dashboard link to navigation if it doesn't exist
     if (navMenu) {
-        const existingDashboardLink = navMenu.querySelector('a[href="dashboard.html"]') || navMenu.querySelector('a[href="#dashboard"]');
-        if (!existingDashboardLink) {
-            const dashboardLi = document.createElement('li');
-            const dashboardLink = document.createElement('a');
-            dashboardLink.href = 'dashboard.html';
-            dashboardLink.textContent = 'Dashboard';
-            dashboardLi.appendChild(dashboardLink);
-            navMenu.insertBefore(dashboardLi, navMenu.lastElementChild);
-        } else {
-            // Update existing link if it's still pointing to #dashboard
-            if (existingDashboardLink.href.includes('#dashboard')) {
-                existingDashboardLink.href = 'dashboard.html';
-            }
-        }
+        // Remove any old dashboard links first
+        const oldDashboardLinks = navMenu.querySelectorAll('a[href="#dashboard"], a[href="dashboard.html"]');
+        oldDashboardLinks.forEach(link => {
+            link.parentElement.remove();
+        });
+        
+        // Create new dashboard link
+        const dashboardLi = document.createElement('li');
+        const dashboardLink = document.createElement('a');
+        dashboardLink.href = 'dashboard.html';
+        dashboardLink.textContent = 'Dashboard';
+        dashboardLink.style.textDecoration = 'none';
+        dashboardLink.style.color = 'white';
+        dashboardLink.style.cursor = 'pointer';
+        dashboardLi.appendChild(dashboardLink);
+        navMenu.insertBefore(dashboardLi, navMenu.lastElementChild);
+        
+        // Ensure the link works by adding explicit click handler
+        dashboardLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = 'dashboard.html';
+        });
     }
     
     // Show dashboard - force display
