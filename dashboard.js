@@ -462,7 +462,7 @@ export async function loadNotes() {
                                 <span>📅 ${pdfDate}</span>
                             </div>
                         </div>
-                        <button class="btn btn-primary view-pdf-btn" onclick="viewPdf(${JSON.stringify(material.storage_path)})">
+                        <button type="button" class="btn btn-primary view-pdf-btn" data-path="${material.storage_path.replace(/"/g, '&quot;')}">
                             View PDF
                         </button>
                     </div>
@@ -487,30 +487,56 @@ export async function loadNotes() {
     }).join('');
 }
 
-/**
- * Global function to view PDF by storage path
- * @param {string} storagePath - The storage path of the PDF file
- */
-window.viewPdf = async function(storagePath) {
-    try {
-        const { supabase, MATERIALS_BUCKET } = await import('./supabaseClient.js');
+// Global event listener for View PDF buttons (event delegation)
+// Only register once using a guard
+if (!window.__pdfListenerBound) {
+    window.__pdfListenerBound = true;
+    
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.view-pdf-btn');
+        if (!btn) return;
         
-        const { data, error } = await supabase.storage
-            .from(MATERIALS_BUCKET)
-            .createSignedUrl(storagePath, 3600);
-        
-        if (error) {
-            console.error('Error creating signed URL:', error);
-            alert(`Error loading PDF: ${error.message}`);
+        const path = btn.dataset.path;
+        if (!path) {
+            console.error('View PDF button missing data-path attribute');
             return;
         }
         
-        window.open(data.signedUrl, '_blank', 'noopener');
-    } catch (error) {
-        console.error('Error in viewPdf:', error);
-        alert(`Error loading PDF: ${error.message || 'Unknown error'}`);
-    }
-};
+        console.log('View PDF clicked path:', path);
+        
+        // Show loading state
+        const originalText = btn.textContent;
+        btn.textContent = 'Loading...';
+        btn.disabled = true;
+        
+        try {
+            const { supabase, MATERIALS_BUCKET } = await import('./supabaseClient.js');
+            
+            const { data, error } = await supabase.storage
+                .from(MATERIALS_BUCKET)
+                .createSignedUrl(path, 3600);
+            
+            console.log('Signed URL:', { data, error });
+            
+            if (error) {
+                console.error('Error creating signed URL:', error);
+                alert('Could not open PDF: ' + error.message);
+                btn.textContent = originalText;
+                btn.disabled = false;
+                return;
+            }
+            
+            window.open(data.signedUrl, '_blank', 'noopener');
+            btn.textContent = originalText;
+            btn.disabled = false;
+        } catch (error) {
+            console.error('Error in viewPdf handler:', error);
+            alert('Could not open PDF: ' + (error.message || 'Unknown error'));
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    });
+}
 
 // Global function for deleting notes (called from onclick in HTML)
 window.deleteNoteById = async function(noteId) {
@@ -974,39 +1000,11 @@ export async function loadMaterials() {
                         <span>📄 ${fileSizeKB} KB</span>
                     </div>
                 </div>
-                <button class="btn btn-primary view-material-btn" data-path="${material.storage_path}" data-filename="${material.filename}">
+                <button type="button" class="btn btn-primary view-pdf-btn" data-path="${material.storage_path.replace(/"/g, '&quot;')}">
                     View PDF
                 </button>
             </div>
         `;
     }).join('');
-
-    // Add click handlers for view buttons
-    container.querySelectorAll('.view-material-btn').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            const storagePath = this.getAttribute('data-path');
-            const filename = this.getAttribute('data-filename');
-            
-            // Show loading state
-            const originalText = this.textContent;
-            this.textContent = 'Loading...';
-            this.disabled = true;
-
-            // Get signed URL and open in new tab
-            const { url, error } = await getMaterialSignedUrl(storagePath);
-            
-            if (error || !url) {
-                alert('Error loading PDF. Please try again.');
-                this.textContent = originalText;
-                this.disabled = false;
-                return;
-            }
-
-            // Open PDF in new tab
-            window.open(url, '_blank');
-            this.textContent = originalText;
-            this.disabled = false;
-        });
-    });
 }
 
