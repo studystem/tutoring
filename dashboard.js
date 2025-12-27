@@ -447,20 +447,22 @@ export async function loadNotes() {
         // Render attached PDFs
         let pdfsHtml = '';
         if (note.materials && note.materials.length > 0) {
-            pdfsHtml = '<div class="note-pdfs" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">';
+            pdfsHtml = '<div class="note-pdfs">';
             pdfsHtml += '<strong>Attached PDFs:</strong>';
-            pdfsHtml += '<div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">';
+            pdfsHtml += '<div class="note-pdfs-list">';
             note.materials.forEach(material => {
                 const pdfDate = new Date(material.created_at).toLocaleDateString();
                 const fileSizeKB = material.size_bytes ? (material.size_bytes / 1024).toFixed(2) : 'Unknown';
                 pdfsHtml += `
-                    <div class="material-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: #f9fafb; border-radius: 0.375rem;">
-                        <div>
-                            <span style="font-weight: 500;">${material.filename}</span>
-                            <span style="color: #6b7280; font-size: 0.875rem; margin-left: 0.5rem;">(${fileSizeKB} KB)</span>
-                            <span style="color: #6b7280; font-size: 0.875rem; margin-left: 0.5rem;">📅 ${pdfDate}</span>
+                    <div class="material-item">
+                        <div class="material-item-info">
+                            <span class="material-item-filename">${material.filename}</span>
+                            <div class="material-item-meta">
+                                <span>${fileSizeKB} KB</span>
+                                <span>📅 ${pdfDate}</span>
+                            </div>
                         </div>
-                        <button class="btn btn-primary view-pdf-btn" style="padding: 0.25rem 0.75rem; font-size: 0.875rem;" data-path="${material.storage_path}" data-filename="${material.filename}">
+                        <button class="btn btn-primary view-pdf-btn" data-path="${material.storage_path}" data-filename="${material.filename}">
                             View PDF
                         </button>
                     </div>
