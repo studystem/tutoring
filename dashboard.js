@@ -158,81 +158,192 @@ export async function loadEvents() {
 }
 
 /**
- * Load and display notes
+ * Fetch notes from Supabase
+ * @returns {Promise<Array>} - Array of notes
+ */
+export async function getNotes() {
+    try {
+        // First get notes
+        const { data: notes, error: notesError } = await supabase
+            .from('notes')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (notesError) {
+            console.error('Error fetching notes:', notesError);
+            return [];
+        }
+
+        if (!notes || notes.length === 0) {
+            return [];
+        }
+
+        // Get unique student and tutor IDs
+        const studentIds = [...new Set(notes.map(n => n.student_id))];
+        const tutorIds = [...new Set(notes.map(n => n.tutor_id))];
+        const eventIds = [...new Set(notes.map(n => n.event_id).filter(Boolean))];
+
+        // Fetch profiles for students and tutors
+        const { data: studentProfiles } = await supabase
+            .from('profiles')
+            .select('user_id, display_name')
+            .in('user_id', studentIds);
+
+        const { data: tutorProfiles } = await supabase
+            .from('profiles')
+            .select('user_id, display_name')
+            .in('user_id', tutorIds);
+
+        // Fetch events if any
+        let events = [];
+        if (eventIds.length > 0) {
+            const { data: eventData } = await supabase
+                .from('events')
+                .select('id, title, start_at')
+                .in('id', eventIds);
+            events = eventData || [];
+        }
+
+        // Create lookup maps
+        const studentMap = new Map((studentProfiles || []).map(p => [p.user_id, p]));
+        const tutorMap = new Map((tutorProfiles || []).map(p => [p.user_id, p]));
+        const eventMap = new Map(events.map(e => [e.id, e]));
+
+        // Enrich notes with profile and event data
+        return notes.map(note => ({
+            ...note,
+            student: studentMap.get(note.student_id) ? { display_name: studentMap.get(note.student_id).display_name } : null,
+            tutor: tutorMap.get(note.tutor_id) ? { display_name: tutorMap.get(note.tutor_id).display_name } : null,
+            event: note.event_id && eventMap.get(note.event_id) ? eventMap.get(note.event_id) : null
+        }));
+    } catch (error) {
+        console.error('Error in getNotes:', error);
+        return [];
+    }
+}
+
+/**
+ * Create a new note in Supabase
+ * @param {string} studentId - Student user ID
+ * @param {string} title - Note title
+ * @param {string} content - Note content
+ * @param {string|null} eventId - Optional event ID
+ * @returns {Promise<{success: boolean, error?: Error, note?: object}>}
+ */
+export async function createNote(studentId, title, content, eventId = null) {
+    try {
+        const user = await getCurrentUserFromSession();
+        if (!user || (user.role !== 'admin' && user.userType !== 'tutor')) {
+            return { success: false, error: new Error('Only tutors can create notes') };
+        }
+
+        const { data, error } = await supabase
+            .from('notes')
+            .insert({
+                tutor_id: user.id,
+                student_id: studentId,
+                event_id: eventId,
+                title: title,
+                content: content
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error creating note:', error);
+            return { success: false, error };
+        }
+
+        return { success: true, note: data };
+    } catch (error) {
+        console.error('Error in createNote:', error);
+        return { success: false, error };
+    }
+}
+
+/**
+ * Delete a note from Supabase
+ * @param {string} noteId - Note ID
+ * @returns {Promise<{success: boolean, error?: Error}>}
+ */
+export async function deleteNote(noteId) {
+    try {
+        const { error } = await supabase
+            .from('notes')
+            .delete()
+            .eq('id', noteId);
+
+        if (error) {
+            console.error('Error deleting note:', error);
+            return { success: false, error };
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error('Error in deleteNote:', error);
+        return { success: false, error };
+    }
+}
+
+/**
+ * Load and display notes from Supabase
  * @returns {Promise<void>}
  */
 export async function loadNotes() {
-    const notes = getStoredNotes();
     const container = document.getElementById('notesContainer');
     if (!container) return;
     
     const user = await getCurrentUserFromSession();
     if (!user) return;
     
-    // Filter notes based on user role
-    let filteredNotes = [];
-    if (user.role === 'admin' || user.userType === 'tutor') {
-        // Tutors only see notes they uploaded
-        filteredNotes = notes.filter(note => note.tutorEmail && note.tutorEmail === user.email);
-    } else {
-        // Students/parents only see their own notes
-        filteredNotes = notes.filter(note => note.studentEmail === user.email);
-    }
+    // Fetch notes from Supabase (RLS will filter based on user role)
+    const notes = await getNotes();
     
-    if (filteredNotes.length === 0) {
+    if (notes.length === 0) {
         container.innerHTML = '<p class="empty-state">No notes available yet. Check back soon!</p>';
         return;
     }
     
-    // Sort notes by date (newest first)
-    filteredNotes.sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    container.innerHTML = filteredNotes.map((note, noteIndex) => {
-        // Find original index in full notes array for deletion and file download
-        const originalIndex = notes.findIndex(n => 
-            n.title === note.title && 
-            n.studentEmail === note.studentEmail && 
-            n.date === note.date &&
-            n.tutorEmail === note.tutorEmail
-        );
-        
+    container.innerHTML = notes.map((note) => {
+        const createdDate = new Date(note.created_at).toLocaleDateString();
         const deleteBtn = (user.role === 'admin' || user.userType === 'tutor') ? 
-            `<button class="delete-btn" onclick="window.deleteNote(${originalIndex})">Delete Note</button>` : '';
+            `<button class="delete-btn" onclick="window.deleteNoteById('${note.id}')">Delete Note</button>` : '';
         
-        const studentInfo = (user.role === 'admin' || user.userType === 'tutor') && note.studentEmail ? 
-            `<span>Student: ${note.studentName || note.studentEmail}</span>` : '';
+        const studentInfo = (user.role === 'admin' || user.userType === 'tutor') && note.student ? 
+            `<span>Student: ${note.student.display_name || 'Unknown'}</span>` : '';
         
-        // File download button
-        let fileDownloadBtn = '';
-        if (note.file) {
-            if (typeof note.file === 'object' && note.file.data && note.file.data.length > 0) {
-                const fileName = note.file.name || 'download';
-                const fileSize = note.file.size ? formatFileSize(note.file.size) : '';
-                fileDownloadBtn = `
-                    <a href="#" class="btn-download" onclick="window.downloadNoteFile(${originalIndex}); return false;">
-                        📎 Download: ${fileName}${fileSize ? ' (' + fileSize + ')' : ''}
-                    </a>
-                `;
-            } else if (typeof note.file === 'string') {
-                fileDownloadBtn = `<p style="color: #6b46c1; margin-top: 0.5rem;">📎 File: ${note.file} (file not available for download)</p>`;
-            }
-        }
+        const eventInfo = note.event ? 
+            `<span>Event: ${note.event.title || 'Linked Event'}</span>` : '';
         
         return `
             <div class="note-card">
                 <h4>${note.title}</h4>
                 <div class="note-meta">
-                    <span>Subject: ${note.subject}</span>
-                    <span>Date: ${new Date(note.date).toLocaleDateString()}</span>
+                    <span>Date: ${createdDate}</span>
                     ${studentInfo}
+                    ${eventInfo}
                 </div>
                 <div class="note-content">${note.content}</div>
-                ${fileDownloadBtn}
                 ${deleteBtn}
             </div>
         `;
     }).join('');
 }
+
+// Global function for deleting notes (called from onclick in HTML)
+window.deleteNoteById = async function(noteId) {
+    if (!confirm('Are you sure you want to delete this note?')) {
+        return;
+    }
+    
+    const { success, error } = await deleteNote(noteId);
+    if (success) {
+        alert('Note deleted successfully!');
+        await loadNotes(); // Reload notes after deletion
+    } else {
+        alert(`Error deleting note: ${error?.message || 'Unknown error'}`);
+    }
+};
 
 // loadMaterials now loads PDF materials - calendar events use loadCalendar()
 

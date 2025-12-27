@@ -49,8 +49,8 @@
                     
                     <div class="admin-grid">
                         <div class="admin-card">
-                            <h4>Upload Tutoring Notes</h4>
-                            <form id="uploadNotesForm">
+                            <h4>Create Note</h4>
+                            <form id="createNoteForm">
                                 <div class="form-group">
                                     <label for="noteStudent">Send to Student</label>
                                     <select id="noteStudent" required>
@@ -58,30 +58,44 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="noteTitle">Note Title</label>
-                                    <input type="text" id="noteTitle" placeholder="e.g., Physics Chapter 5 - Mechanics" required>
+                                    <label for="noteEvent">Link to Event (optional)</label>
+                                    <select id="noteEvent">
+                                        <option value="">No event link</option>
+                                    </select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="noteSubject">Subject</label>
-                                    <select id="noteSubject" required>
-                                        <option value="">Select Subject</option>
-                                        <option value="chemistry">Chemistry</option>
-                                        <option value="biology">Biology</option>
-                                        <option value="physics">Physics</option>
-                                        <option value="mathematics">Mathematics</option>
-                                        <option value="cs">Computer Science</option>
-                                    </select>
+                                    <label for="noteTitle">Note Title</label>
+                                    <input type="text" id="noteTitle" placeholder="e.g., Physics Chapter 5 - Mechanics" required>
                                 </div>
                                 <div class="form-group">
                                     <label for="noteContent">Note Content</label>
                                     <textarea id="noteContent" rows="8" placeholder="Enter the tutoring notes content here..." required></textarea>
                                 </div>
+                                <button type="submit" class="btn btn-primary">Create Note</button>
+                            </form>
+                        </div>
+                        
+                        <div class="admin-card">
+                            <h4>Upload PDF Material</h4>
+                            <form id="uploadMaterialForm">
                                 <div class="form-group">
-                                    <label for="noteFile">Upload PDF (optional)</label>
-                                    <input type="file" id="noteFile" accept=".pdf">
+                                    <label for="materialStudent">Send to Student</label>
+                                    <select id="materialStudent" required>
+                                        <option value="">Select a student</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="materialEvent">Link to Event (optional)</label>
+                                    <select id="materialEvent">
+                                        <option value="">No event link</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="materialFile">Upload PDF</label>
+                                    <input type="file" id="materialFile" accept=".pdf" required>
                                     <small style="color: #6b7280; font-size: 0.85rem;">PDF files will be stored in Supabase Storage (max 10MB)</small>
                                 </div>
-                                <button type="submit" class="btn btn-primary">Upload Notes</button>
+                                <button type="submit" class="btn btn-primary">Upload PDF</button>
                             </form>
                         </div>
                         
@@ -128,14 +142,6 @@
                     </div>
                 </div>
 
-                <!-- Materials Section -->
-                <div class="dashboard-section">
-                    <h3>Learning Materials</h3>
-                    <div id="materialsContainer" class="materials-container">
-                        <p class="empty-state">No materials available yet. Check back soon!</p>
-                    </div>
-                </div>
-                
                 <!-- Calendar Section -->
                 <div class="dashboard-section">
                     <h3>Upcoming Sessions</h3>
@@ -226,7 +232,7 @@
     </div>
 
     <script type="module">
-        import { requireAuth, getCurrentUserFromSession, loadNotes, loadMaterials, loadCalendar, getPendingUsers, getApprovedUsers } from './dashboard.js';
+        import { requireAuth, getCurrentUserFromSession, loadNotes, loadCalendar, getPendingUsers, getApprovedUsers } from './dashboard.js';
         import { signOut } from './auth.js';
         import { initTutorFunctions, loadPendingAccounts, loadStudentDropdown } from './script.js';
         
@@ -273,14 +279,17 @@
                 tutorPanel.style.visibility = 'visible';
             }
             
-            // Load notes, materials, and calendar
+            // Load notes and calendar
             setTimeout(async function() {
                 await loadNotes();
-                await loadMaterials();
                 await loadCalendar();
                 if (isTutor) {
                     loadPendingAccounts();
                     loadStudentDropdown();
+                    // Load event dropdowns (will be populated when student is selected)
+                    const { loadEventDropdown } = await import('./dashboard.js');
+                    await loadEventDropdown('noteEvent');
+                    await loadEventDropdown('materialEvent');
                 }
             }, 100);
             

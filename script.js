@@ -326,10 +326,9 @@ async function updateUIForLoggedInUser(user) {
     // Load and display notes and calendar (only on index.html if dashboard section exists)
     if (dashboard) {
         // Import dynamically to avoid circular dependency
-        import('./dashboard.js').then(({ loadNotes, loadMaterials, loadCalendar }) => {
+        import('./dashboard.js').then(({ loadNotes, loadCalendar }) => {
             setTimeout(async function() {
                 await loadNotes();
-                await loadMaterials();
                 await loadCalendar();
         if (isTutor) {
             loadPendingAccounts();
@@ -695,7 +694,7 @@ function initAuthModal() {
                 submitBtn.textContent = originalText;
                 submitBtn.disabled = false;
                 
-                alert(`Account created successfully! Your account is pending verification by the tutor. You will be able to log in once your account is approved.`);
+                alert(`Account created successfully! You can now log in.`);
             } catch (error) {
                 console.error('Signup error:', error);
                 alert('An error occurred during signup. Please try again.');
@@ -814,16 +813,33 @@ export async function loadStudentDropdown() {
                 `<option value="${student.user_id}">${student.display_name || student.user_id}</option>`
         ).join('');
 
-        const studentSelect = document.getElementById('noteStudent');
+        // Update all student dropdowns
+        const noteStudentSelect = document.getElementById('noteStudent');
+        if (noteStudentSelect) {
+            noteStudentSelect.innerHTML = studentOptions;
+            // Reload event dropdown when student changes
+            noteStudentSelect.addEventListener('change', async function() {
+                const selectedStudentId = this.value;
+                const { loadEventDropdown } = await import('./dashboard.js');
+                await loadEventDropdown('noteEvent', selectedStudentId);
+            });
+        }
+        
+        const materialStudentSelect = document.getElementById('materialStudent');
+        if (materialStudentSelect) {
+            materialStudentSelect.innerHTML = studentOptions;
+            // Reload event dropdown when student changes
+            materialStudentSelect.addEventListener('change', async function() {
+                const selectedStudentId = this.value;
+                const { loadEventDropdown } = await import('./dashboard.js');
+                await loadEventDropdown('materialEvent', selectedStudentId);
+            });
+        }
+        
         const eventStudentSelect = document.getElementById('eventStudent');
-    
-    if (studentSelect) {
-        studentSelect.innerHTML = studentOptions;
-    }
-    
-    if (eventStudentSelect) {
-        eventStudentSelect.innerHTML = studentOptions;
-    }
+        if (eventStudentSelect) {
+            eventStudentSelect.innerHTML = studentOptions;
+        }
     } catch (error) {
         console.error('Error in loadStudentDropdown:', error);
         // Fallback to localStorage
@@ -965,7 +981,120 @@ export function initTutorFunctions() {
         eventDateInput.setAttribute('min', today);
     }
     
-    // Upload notes form
+    // Create note form
+    const createNoteForm = document.getElementById('createNoteForm');
+    if (createNoteForm) {
+        createNoteForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const studentId = document.getElementById('noteStudent').value;
+            const eventId = document.getElementById('noteEvent').value || null;
+            const title = document.getElementById('noteTitle').value;
+            const content = document.getElementById('noteContent').value;
+            
+            if (!studentId || !title || !content) {
+                alert('Please fill in all required fields, including selecting a student.');
+                return;
+            }
+            
+            const submitBtn = createNoteForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Creating note...';
+            submitBtn.disabled = true;
+            
+            try {
+                const { createNote } = await import('./dashboard.js');
+                const { success, error, note } = await createNote(studentId, title, content, eventId);
+                
+                if (!success || error) {
+                    alert(`Error creating note: ${error?.message || 'Unknown error'}`);
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                }
+                
+                alert('Note created successfully!');
+                createNoteForm.reset();
+                const { loadNotes } = await import('./dashboard.js');
+                await loadNotes();
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            } catch (error) {
+                console.error('Error in note creation:', error);
+                alert('Error creating note. Please try again.');
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        });
+    }
+    
+    // Upload material (PDF) form
+    const uploadMaterialForm = document.getElementById('uploadMaterialForm');
+    if (uploadMaterialForm) {
+        uploadMaterialForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const studentId = document.getElementById('materialStudent').value;
+            const eventId = document.getElementById('materialEvent').value || null;
+            const fileInput = document.getElementById('materialFile');
+            const file = fileInput.files[0];
+            
+            if (!studentId || !file) {
+                alert('Please fill in all required fields, including selecting a student and PDF file.');
+                return;
+            }
+            
+            // Validate PDF
+            if (file.type !== 'application/pdf') {
+                alert('Only PDF files are allowed.');
+                return;
+            }
+            
+            // Check file size (limit to 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                alert('PDF file size must be less than 10MB. Please choose a smaller file.');
+                return;
+            }
+            
+            const submitBtn = uploadMaterialForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Uploading PDF...';
+            submitBtn.disabled = true;
+            
+            try {
+                const currentUser = await getCurrentUserFromSession();
+                if (!currentUser) {
+                    alert('You must be logged in to upload files.');
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                }
+                
+                const tutorId = currentUser.id;
+                const { uploadMaterial } = await import('./dashboard.js');
+                const { success, error: uploadError, material } = await uploadMaterial(file, studentId, tutorId, eventId);
+                
+                if (!success || uploadError) {
+                    alert(`Error uploading PDF: ${uploadError?.message || 'Unknown error'}`);
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                }
+                
+                alert('PDF uploaded successfully!');
+                uploadMaterialForm.reset();
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            } catch (error) {
+                console.error('Error in material upload:', error);
+                alert('Error uploading PDF. Please try again.');
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        });
+    }
+    
+    // Legacy upload notes form (for backward compatibility, can be removed later)
     const uploadNotesForm = document.getElementById('uploadNotesForm');
     if (uploadNotesForm) {
         uploadNotesForm.addEventListener('submit', async function(e) {
@@ -1061,9 +1190,8 @@ export function initTutorFunctions() {
                             alert(`Notes and PDF uploaded successfully for ${studentName}!`);
                             uploadNotesForm.reset();
                             loadStudentDropdown(); // Reset dropdown
-                            const { loadNotes, loadMaterials } = await import('./dashboard.js');
+                            const { loadNotes } = await import('./dashboard.js');
                             await loadNotes();
-                            await loadMaterials();
                             submitBtn.textContent = originalText;
                             submitBtn.disabled = false;
                         } catch (uploadError) {
