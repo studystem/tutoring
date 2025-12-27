@@ -812,7 +812,7 @@ export async function loadStudentDropdown() {
             (students || []).map(student => 
                 `<option value="${student.user_id}">${student.display_name || student.user_id}</option>`
         ).join('');
-
+    
         // Update all student dropdowns
         const noteStudentSelect = document.getElementById('noteStudent');
         if (noteStudentSelect) {
@@ -837,9 +837,9 @@ export async function loadStudentDropdown() {
         }
         
         const eventStudentSelect = document.getElementById('eventStudent');
-        if (eventStudentSelect) {
-            eventStudentSelect.innerHTML = studentOptions;
-        }
+    if (eventStudentSelect) {
+        eventStudentSelect.innerHTML = studentOptions;
+    }
     } catch (error) {
         console.error('Error in loadStudentDropdown:', error);
         // Fallback to localStorage
@@ -973,7 +973,11 @@ window.showEventDetails = function(title, date, time, duration, description, stu
 // deleteEvent is now handled in dashboard.js with Supabase
 
 // Initialize tutor functionality - exported for use in dashboard
+let tutorHandlersInitialized = false;
 export function initTutorFunctions() {
+    if (tutorHandlersInitialized) return;
+    tutorHandlersInitialized = true;
+    
     // Set default date to today for calendar form
     const eventDateInput = document.getElementById('eventDate');
     if (eventDateInput) {
@@ -983,7 +987,8 @@ export function initTutorFunctions() {
     
     // Create note form
     const createNoteForm = document.getElementById('createNoteForm');
-    if (createNoteForm) {
+    if (createNoteForm && !createNoteForm.dataset.bound) {
+        createNoteForm.dataset.bound = "true";
         createNoteForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -1030,7 +1035,8 @@ export function initTutorFunctions() {
     
     // Upload material (PDF) form
     const uploadMaterialForm = document.getElementById('uploadMaterialForm');
-    if (uploadMaterialForm) {
+    if (uploadMaterialForm && !uploadMaterialForm.dataset.bound) {
+        uploadMaterialForm.dataset.bound = "true";
         uploadMaterialForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -1053,9 +1059,9 @@ export function initTutorFunctions() {
             // Check file size (limit to 10MB)
             if (file.size > 10 * 1024 * 1024) {
                 alert('PDF file size must be less than 10MB. Please choose a smaller file.');
-                return;
-            }
-            
+        return;
+    }
+    
             const submitBtn = uploadMaterialForm.querySelector('button[type="submit"]');
             const originalText = submitBtn.textContent;
             submitBtn.textContent = 'Uploading PDF...';
@@ -1078,9 +1084,9 @@ export function initTutorFunctions() {
                     alert(`Error uploading PDF: ${uploadError?.message || 'Unknown error'}`);
                     submitBtn.textContent = originalText;
                     submitBtn.disabled = false;
-                    return;
-                }
-                
+                return;
+            }
+            
                 alert('PDF uploaded successfully!');
                 uploadMaterialForm.reset();
                 submitBtn.textContent = originalText;
@@ -1308,7 +1314,8 @@ export function initTutorFunctions() {
     
     // Calendar form
     const calendarForm = document.getElementById('calendarForm');
-    if (calendarForm) {
+    if (calendarForm && !calendarForm.dataset.bound) {
+        calendarForm.dataset.bound = "true";
         calendarForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
