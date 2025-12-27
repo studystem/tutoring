@@ -77,8 +77,9 @@
                                     <textarea id="noteContent" rows="8" placeholder="Enter the tutoring notes content here..." required></textarea>
                                 </div>
                                 <div class="form-group">
-                                    <label for="noteFile">Or Upload File (optional)</label>
-                                    <input type="file" id="noteFile" accept=".pdf,.doc,.docx,.txt">
+                                    <label for="noteFile">Upload PDF (optional)</label>
+                                    <input type="file" id="noteFile" accept=".pdf">
+                                    <small style="color: #6b7280; font-size: 0.85rem;">PDF files will be stored in Supabase Storage (max 10MB)</small>
                                 </div>
                                 <button type="submit" class="btn btn-primary">Upload Notes</button>
                             </form>
@@ -124,6 +125,14 @@
                     <h3>Tutoring Notes</h3>
                     <div id="notesContainer" class="notes-container">
                         <p class="empty-state">No notes available yet. Check back soon!</p>
+                    </div>
+                </div>
+
+                <!-- Materials Section -->
+                <div class="dashboard-section">
+                    <h3>Learning Materials</h3>
+                    <div id="materialsContainer" class="materials-container">
+                        <p class="empty-state">No materials available yet. Check back soon!</p>
                     </div>
                 </div>
                 
@@ -215,29 +224,30 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
-    <script>
-        // Dashboard-specific initialization - wait for script.js to fully load
-        function initDashboard() {
+    <script type="module">
+        import { requireAuth, getCurrentUserFromSession, loadNotes, loadMaterials, loadCalendar, getPendingUsers, getApprovedUsers } from './dashboard.js';
+        import { signOut } from './auth.js';
+        import { initTutorFunctions, loadPendingAccounts, loadStudentDropdown } from './script.js';
+        
+        // Dashboard-specific initialization
+        async function initDashboard() {
             // Check if user is logged in, if not redirect to home
-            if (typeof getCurrentUser !== 'function') {
-                // Script not loaded yet, wait a bit
-                setTimeout(initDashboard, 100);
-                return;
+            const isAuthenticated = await requireAuth();
+            if (!isAuthenticated) {
+                return; // requireAuth already handles the redirect
             }
             
-            const user = getCurrentUser();
+            const user = await getCurrentUserFromSession();
             if (!user) {
                 alert('Please log in to access the dashboard.');
                 window.location.href = 'index.html';
                 return;
             }
             
-            // Update UI for logged in user (but don't re-initialize auth modal)
+            // Update UI for logged in user
             const loginBtn = document.getElementById('loginBtn');
             const dashboard = document.getElementById('dashboard');
             const tutorPanel = document.getElementById('tutorPanel');
-            const navMenu = document.querySelector('.nav-menu');
             
             if (loginBtn) {
                 const displayName = user.name || `${user.userType.charAt(0).toUpperCase() + user.userType.slice(1)} Account`;
@@ -262,10 +272,11 @@
                 tutorPanel.style.visibility = 'visible';
             }
             
-            // Load notes and calendar
-            setTimeout(function() {
-                loadNotes();
-                loadCalendar();
+            // Load notes, materials, and calendar
+            setTimeout(async function() {
+                await loadNotes();
+                await loadMaterials();
+                await loadCalendar();
                 if (isTutor) {
                     loadPendingAccounts();
                     loadStudentDropdown();
@@ -275,12 +286,12 @@
             // Initialize tutor functions
             initTutorFunctions();
             
-            // Initialize authentication modal (for logout only)
+            // Initialize logout button
             const logoutBtn = document.getElementById('logoutBtn');
             if (logoutBtn) {
-                logoutBtn.addEventListener('click', function() {
+                logoutBtn.addEventListener('click', async function() {
                     if (confirm('Are you sure you want to log out?')) {
-                        setCurrentUser(null);
+                        await signOut();
                         alert('You have been logged out successfully.');
                         window.location.href = 'index.html';
                     }

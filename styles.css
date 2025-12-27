@@ -763,13 +763,16 @@ body {
 }
 
 .notes-container,
-.calendar-container {
+.calendar-container,
+.materials-container {
     display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 1.5rem;
 }
 
 .note-card,
-.calendar-event {
+.calendar-event,
+.material-card {
     background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
     border-radius: 15px;
     padding: 1.5rem;
@@ -778,17 +781,37 @@ body {
 }
 
 .note-card:hover,
-.calendar-event:hover {
+.calendar-event:hover,
+.material-card:hover {
     transform: translateY(-3px);
     box-shadow: 0 8px 20px rgba(107, 70, 193, 0.15);
 }
 
 .note-card h4,
-.calendar-event h4 {
+.calendar-event h4,
+.material-card h4 {
     color: #1e1b4b;
     font-size: 1.25rem;
     font-weight: 600;
     margin-bottom: 0.5rem;
+}
+
+.material-info {
+    margin-bottom: 1rem;
+}
+
+.material-meta {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.5rem;
+    color: #64748b;
+    font-size: 0.9rem;
+    flex-wrap: wrap;
+}
+
+.material-card .btn {
+    width: 100%;
+    margin-top: 1rem;
 }
 
 .note-meta {

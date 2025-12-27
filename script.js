@@ -1,9 +1,12 @@
-// User Management and Data Storage - MUST BE DEFINED FIRST
-const USER_STORAGE_KEY = 'studystem_user';
+// Import Supabase auth functions
+import { signIn, signUp, signOut, getSession, getCurrentUser as getSupabaseUser } from './auth.js';
+import { getStoredNotes, getPendingUsers, getApprovedUsers, getCurrentUserFromSession, uploadMaterial } from './dashboard.js';
+import { supabase } from './supabaseClient.js';
+
+// User Management and Data Storage
 const PENDING_USERS_KEY = 'studystem_pending_users';
 const APPROVED_USERS_KEY = 'studystem_approved_users';
 const NOTES_STORAGE_KEY = 'studystem_notes';
-const CALENDAR_STORAGE_KEY = 'studystem_calendar';
 
 // Special tutor accounts
 const TUTOR_ACCOUNTS = [
@@ -193,73 +196,36 @@ document.addEventListener('DOMContentLoaded', function() {
     checkAuthStatus();
 });
 
-// Get stored data
-function getStoredNotes() {
-    const notes = localStorage.getItem(NOTES_STORAGE_KEY);
-    return notes ? JSON.parse(notes) : [];
-}
-
-function getStoredCalendar() {
-    const calendar = localStorage.getItem(CALENDAR_STORAGE_KEY);
-    return calendar ? JSON.parse(calendar) : [];
-}
-
-function getPendingUsers() {
-    const pending = localStorage.getItem(PENDING_USERS_KEY);
-    return pending ? JSON.parse(pending) : [];
-}
-
-function getApprovedUsers() {
-    const approved = localStorage.getItem(APPROVED_USERS_KEY);
-    return approved ? JSON.parse(approved) : [];
-}
-
-function saveNotes(notes) {
+// Storage helper functions (re-exported from dashboard.js for compatibility)
+export function saveNotes(notes) {
     localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
 }
 
-function saveCalendar(events) {
-    localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(events));
-}
+// saveCalendar removed - events are now stored in Supabase
 
-function savePendingUsers(users) {
+export function savePendingUsers(users) {
     localStorage.setItem(PENDING_USERS_KEY, JSON.stringify(users));
 }
 
-function saveApprovedUsers(users) {
+export function saveApprovedUsers(users) {
     localStorage.setItem(APPROVED_USERS_KEY, JSON.stringify(users));
 }
 
-function isUserApproved(email) {
+export function isUserApproved(email) {
     const approved = getApprovedUsers();
     return approved.some(user => user.email.toLowerCase() === email.toLowerCase());
 }
 
-function getCurrentUser() {
-    const user = localStorage.getItem(USER_STORAGE_KEY);
-    return user ? JSON.parse(user) : null;
-}
-
-function setCurrentUser(user) {
-    if (user) {
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-    } else {
-        localStorage.removeItem(USER_STORAGE_KEY);
-    }
-}
-
 // Check if user is logged in on page load
-function checkAuthStatus() {
-    const user = getCurrentUser();
+async function checkAuthStatus() {
+    const user = await getCurrentUserFromSession();
     if (user) {
-        updateUIForLoggedInUser(user);
-        // If on index.html and user is logged in, they can access dashboard via navigation
-        // Dashboard page will handle its own authentication check
+        await updateUIForLoggedInUser(user);
     }
 }
 
 // Update UI based on login status
-function updateUIForLoggedInUser(user) {
+async function updateUIForLoggedInUser(user) {
     const loginBtn = document.getElementById('loginBtn');
     const dashboard = document.getElementById('dashboard');
     const tutorPanel = document.getElementById('tutorPanel');
@@ -357,15 +323,21 @@ function updateUIForLoggedInUser(user) {
         tutorPanel.style.display = 'none';
     }
     
-    // Load and display notes and calendar
-    setTimeout(function() {
-        loadNotes();
-        loadCalendar();
+    // Load and display notes and calendar (only on index.html if dashboard section exists)
+    if (dashboard) {
+        // Import dynamically to avoid circular dependency
+        import('./dashboard.js').then(({ loadNotes, loadMaterials, loadCalendar }) => {
+            setTimeout(async function() {
+                await loadNotes();
+                await loadMaterials();
+                await loadCalendar();
         if (isTutor) {
             loadPendingAccounts();
             loadStudentDropdown();
         }
     }, 100);
+        });
+    }
 }
 
 function updateUIForLoggedOut() {
@@ -431,10 +403,10 @@ function initAuthModal() {
     // Open modal - check if already has listener to avoid duplicates
     if (!loginBtn.hasAttribute('data-auth-listener')) {
         loginBtn.setAttribute('data-auth-listener', 'true');
-        loginBtn.addEventListener('click', function(e) {
+        loginBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             e.stopPropagation();
-            const user = getCurrentUser();
+            const user = await getCurrentUserFromSession();
             if (!user) {
                 if (modal) {
                     modal.style.display = 'block';
@@ -484,7 +456,7 @@ function initAuthModal() {
     
     // Login form submission
     if (loginFormElement) {
-        loginFormElement.addEventListener('submit', function(e) {
+        loginFormElement.addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const emailInput = document.getElementById('loginEmail').value.trim();
@@ -501,59 +473,50 @@ function initAuthModal() {
             submitBtn.textContent = 'Logging in...';
             submitBtn.disabled = true;
             
-            // Check if it's a tutor account FIRST (before checking userType)
-            let user = null;
+            try {
+                // Try Supabase authentication
+                const { user: supabaseUser, error } = await signIn(emailInput, password);
+                
+                if (error) {
+                    // Check if it's a tutor account (legacy support)
             const tutorAccount = findTutorAccount(emailInput, password);
             
             if (tutorAccount) {
-                // Tutor account found - skip userType requirement completely
-                user = {
-                    name: tutorAccount.name,
-                    email: tutorAccount.email,
-                    userType: 'tutor',
-                    role: 'admin'
+                        // For tutor accounts, we still need to handle them specially
+                        // But since we're using Supabase, we should create accounts for tutors too
+                        alert('Please use the Supabase account for this email. If you need help, contact support.');
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                    } else {
+                        alert('Invalid email or password. Please try again.');
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                    }
+                }
+                
+                // Get user metadata
+                const userMetadata = supabaseUser.user_metadata || {};
+                const user = {
+                    id: supabaseUser.id,
+                    name: userMetadata.name || supabaseUser.email?.split('@')[0] || 'User',
+                    email: supabaseUser.email,
+                    userType: userMetadata.userType || 'student',
+                    role: userMetadata.role || 'user'
                 };
-            } else {
-                // Not a tutor - require userType selection for regular users
-                if (!userType) {
-                    alert('Please select whether you are a Parent or Student.');
-                    submitBtn.textContent = originalText;
-                    submitBtn.disabled = false;
-                    return;
-                }
                 
-                // Use lowercase email for regular user lookup
-                const email = emailInput.toLowerCase();
-                
-                // Check if user is approved
-                if (!isUserApproved(email)) {
-                    alert('Your account is pending verification. Please wait for the tutor to approve your account. You will be notified once approved.');
-                    submitBtn.textContent = originalText;
-                    submitBtn.disabled = false;
-                    return;
-                }
-                
-                // Get approved user info
-                const approved = getApprovedUsers();
-                const approvedUser = approved.find(u => u.email.toLowerCase() === email.toLowerCase());
-                
-                if (approvedUser) {
-                    user = {
-                        name: approvedUser.name,
-                        email: approvedUser.email,
-                        userType: approvedUser.userType,
-                        role: 'user'
-                    };
-                } else {
-                    alert('Account not found. Please sign up first.');
+                // Check if user is approved (for non-tutor accounts)
+                if (user.role !== 'admin' && user.userType !== 'tutor') {
+                    if (!isUserApproved(user.email)) {
+                        await signOut(); // Sign out if not approved
+                        alert('Your account is pending verification. Please wait for the tutor to approve your account. You will be notified once approved.');
                     submitBtn.textContent = originalText;
                     submitBtn.disabled = false;
                     return;
                 }
             }
             
-            setTimeout(function() {
-                setCurrentUser(user);
                 modal.style.display = 'none';
                 document.body.style.overflow = 'auto';
                 loginFormElement.reset();
@@ -561,22 +524,27 @@ function initAuthModal() {
                 submitBtn.disabled = false;
                 
                 // Update UI
-                updateUIForLoggedInUser(user);
+                await updateUIForLoggedInUser(user);
                 
-                const welcomeMsg = user.role === 'admin' 
+                const welcomeMsg = user.role === 'admin' || user.userType === 'tutor'
                     ? `Welcome back, ${user.name}! You have tutor admin access. Redirecting to dashboard...`
                     : `Welcome back, ${user.name}! Redirecting to dashboard...`;
                 alert(welcomeMsg);
                 
                 // Redirect to dashboard page
                 window.location.href = 'dashboard.html';
-            }, 500);
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('An error occurred during login. Please try again.');
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
         });
     }
     
     // Signup form submission
     if (signupFormElement) {
-        signupFormElement.addEventListener('submit', function(e) {
+        signupFormElement.addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const name = document.getElementById('signupName').value;
@@ -600,7 +568,7 @@ function initAuthModal() {
                 return;
             }
             
-            // Check if email already exists
+            // Check if email already exists in pending/approved users
             const pending = getPendingUsers();
             const approved = getApprovedUsers();
             if (pending.some(u => u.email.toLowerCase() === email) || 
@@ -614,14 +582,28 @@ function initAuthModal() {
             submitBtn.textContent = 'Creating account...';
             submitBtn.disabled = true;
             
-            setTimeout(function() {
-                // Create pending account
+            try {
+                // Create Supabase account
+                const { user: supabaseUser, error } = await signUp(email, password, {
+                    name: name,
+                    userType: userType,
+                    role: 'user'
+                });
+                
+                if (error) {
+                    alert(`Error creating account: ${error.message}. Please try again.`);
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                }
+                
+                // Create pending account in local storage for approval workflow
                 const pendingUser = {
                     name: name,
                     email: email,
-                    password: password, // In production, this should be hashed
                     userType: userType,
                     role: 'user',
+                    supabaseId: supabaseUser?.id,
                     createdAt: new Date().toISOString()
                 };
                 
@@ -635,31 +617,31 @@ function initAuthModal() {
                 submitBtn.disabled = false;
                 
                 alert(`Account created successfully! Your account is pending verification by the tutor. You will be able to log in once your account is approved.`);
-            }, 500);
+            } catch (error) {
+                console.error('Signup error:', error);
+                alert('An error occurred during signup. Please try again.');
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
         });
     }
     
-    // Logout functionality
+    // Logout functionality (only on index.html)
     const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', function() {
+    if (logoutBtn && !window.location.pathname.includes('dashboard.html')) {
+        logoutBtn.addEventListener('click', async function() {
             if (confirm('Are you sure you want to log out?')) {
-                setCurrentUser(null);
+                await signOut();
                 updateUIForLoggedOut();
                 alert('You have been logged out successfully.');
-                // Redirect to home page
-                if (window.location.pathname.includes('dashboard.html')) {
-                    window.location.href = 'index.html';
-                } else {
                     window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
             }
         });
     }
 }
 
 // Account Verification Management
-function loadPendingAccounts() {
+export function loadPendingAccounts() {
     const pending = getPendingUsers();
     const container = document.getElementById('pendingAccountsContainer');
     if (!container) return;
@@ -722,117 +704,90 @@ window.rejectAccount = function(index) {
     }
 };
 
-function loadStudentDropdown() {
-    const approved = getApprovedUsers();
-    const studentSelect = document.getElementById('noteStudent');
-    const eventStudentSelect = document.getElementById('eventStudent');
-    
-    // Filter to only students (not parents)
-    const students = approved.filter(u => u.userType === 'student');
-    const studentOptions = '<option value="">Select a student</option>' +
-        students.map(student => 
-            `<option value="${student.email}">${student.name} (${student.email})</option>`
-        ).join('');
-    
-    if (studentSelect) {
-        studentSelect.innerHTML = studentOptions;
-    }
-    
-    if (eventStudentSelect) {
-        eventStudentSelect.innerHTML = studentOptions;
-    }
-}
+export async function loadStudentDropdown() {
+    try {
+        // Get students from Supabase profiles table
+        const { data: students, error } = await supabase
+            .from('profiles')
+            .select('user_id, display_name, role')
+            .eq('role', 'student')
+            .order('display_name', { ascending: true });
 
-// Notes Management (Student-Specific)
-function loadNotes() {
-    const notes = getStoredNotes();
-    const container = document.getElementById('notesContainer');
-    if (!container) return;
-    
-    const user = getCurrentUser();
-    if (!user) return;
-    
-    // Filter notes based on user role
-    let filteredNotes = [];
-    if (user.role === 'admin') {
-        // Tutors see all notes
-        filteredNotes = notes;
-    } else {
-        // Students/parents only see their own notes
-        filteredNotes = notes.filter(note => note.studentEmail === user.email);
-    }
-    
-    if (filteredNotes.length === 0) {
-        container.innerHTML = '<p class="empty-state">No notes available yet. Check back soon!</p>';
-        return;
-    }
-    
-    // Sort notes by date (newest first)
-    filteredNotes.sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    container.innerHTML = filteredNotes.map((note, noteIndex) => {
-        // Find original index in full notes array for deletion and file download
-        const originalIndex = notes.findIndex(n => 
-            n.title === note.title && 
-            n.studentEmail === note.studentEmail && 
-            n.date === note.date
-        );
+        if (error) {
+            console.error('Error loading students:', error);
+            // Fallback to approved users from localStorage
+            const approved = getApprovedUsers();
+            const localStudents = approved.filter(u => u.userType === 'student');
+            const studentOptions = '<option value="">Select a student</option>' +
+                localStudents.map(student => 
+                    `<option value="${student.email}">${student.name} (${student.email})</option>`
+                ).join('');
+            
+            const studentSelect = document.getElementById('noteStudent');
+            const eventStudentSelect = document.getElementById('eventStudent');
+            if (studentSelect) studentSelect.innerHTML = studentOptions;
+            if (eventStudentSelect) eventStudentSelect.innerHTML = studentOptions;
+            return;
+        }
+
+        const studentOptions = '<option value="">Select a student</option>' +
+            (students || []).map(student => 
+                `<option value="${student.user_id}">${student.display_name || student.user_id}</option>`
+            ).join('');
+
+        const studentSelect = document.getElementById('noteStudent');
+        const eventStudentSelect = document.getElementById('eventStudent');
         
-        const user = getCurrentUser();
-        const deleteBtn = (user && user.role === 'admin') ? 
-            `<button class="delete-btn" onclick="deleteNote(${originalIndex})">Delete Note</button>` : '';
-        
-        const studentInfo = user.role === 'admin' && note.studentEmail ? 
-            `<span>Student: ${note.studentName || note.studentEmail}</span>` : '';
-        
-        // File download button
-        let fileDownloadBtn = '';
-        if (note.file) {
-            // Check if file has data (new format with base64 data)
-            if (typeof note.file === 'object' && note.file.data && note.file.data.length > 0) {
-                // New format with file data - always show download button
-                const fileName = note.file.name || 'download';
-                const fileSize = note.file.size ? formatFileSize(note.file.size) : '';
-                fileDownloadBtn = `
-                    <a href="#" class="btn-download" onclick="downloadNoteFile(${originalIndex}); return false;">
-                        📎 Download: ${fileName}${fileSize ? ' (' + fileSize + ')' : ''}
-                    </a>
-                `;
-            } else if (typeof note.file === 'string') {
-                // Legacy format (just filename) - show message but no download
-                fileDownloadBtn = `<p style="color: #6b46c1; margin-top: 0.5rem;">📎 File: ${note.file} (file not available for download)</p>`;
-            } else if (typeof note.file === 'object' && note.file.name && !note.file.data) {
-                // File object exists but no data - might be corrupted
-                fileDownloadBtn = `<p style="color: #ef4444; margin-top: 0.5rem;">📎 File: ${note.file.name} (file data missing - please re-upload)</p>`;
-            } else {
-                // Unknown file format
-                console.warn('Unknown file format in note:', note.file);
-            }
+        if (studentSelect) {
+            studentSelect.innerHTML = studentOptions;
         }
         
-        return `
-            <div class="note-card">
-                <h4>${note.title}</h4>
-                <div class="note-meta">
-                    <span>Subject: ${note.subject}</span>
-                    <span>Date: ${new Date(note.date).toLocaleDateString()}</span>
-                    ${studentInfo}
-                </div>
-                <div class="note-content">${note.content}</div>
-                ${fileDownloadBtn}
-                ${deleteBtn}
-            </div>
-        `;
-    }).join('');
+        if (eventStudentSelect) {
+            eventStudentSelect.innerHTML = studentOptions;
+        }
+    } catch (error) {
+        console.error('Error in loadStudentDropdown:', error);
+        // Fallback to localStorage
+        const approved = getApprovedUsers();
+        const students = approved.filter(u => u.userType === 'student');
+        const studentOptions = '<option value="">Select a student</option>' +
+            students.map(student => 
+                `<option value="${student.email}">${student.name} (${student.email})</option>`
+            ).join('');
+        
+        const studentSelect = document.getElementById('noteStudent');
+        const eventStudentSelect = document.getElementById('eventStudent');
+        if (studentSelect) studentSelect.innerHTML = studentOptions;
+        if (eventStudentSelect) eventStudentSelect.innerHTML = studentOptions;
+    }
 }
 
+// Notes Management functions are now in dashboard.js
+
 // Make delete functions globally accessible
-window.deleteNote = function(index) {
+window.deleteNote = async function(index) {
     if (confirm('Are you sure you want to delete this note?')) {
         const notes = getStoredNotes();
-        notes.splice(index, 1);
-        saveNotes(notes);
-        loadNotes();
+        const user = await getCurrentUserFromSession();
+        
+        if (index >= 0 && index < notes.length) {
+            const note = notes[index];
+            
+            // For tutors, only allow deleting their own notes
+            if (user && (user.role === 'admin' || user.userType === 'tutor') && note.tutorEmail && note.tutorEmail !== user.email) {
+                alert('You can only delete notes that you uploaded.');
+                return;
+            }
+            
+            notes.splice(index, 1);
+            saveNotes(notes);
+            // Reload notes from dashboard.js
+            const { loadNotes } = await import('./dashboard.js');
+            await loadNotes();
+            alert('Note deleted successfully!');
+        } else {
+            alert('Error: Note not found.');
+        }
     }
 };
 
@@ -906,203 +861,7 @@ function formatFileSize(bytes) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
-// Calendar Management with Google Calendar-style view
-let currentCalendarDate = new Date();
-
-function loadCalendar() {
-    const allEvents = getStoredCalendar();
-    const calendarView = document.getElementById('calendarView');
-    const calendarList = document.getElementById('calendarList');
-    const monthYear = document.getElementById('currentMonthYear');
-    
-    if (!calendarView) return;
-    
-    // Filter events based on user role
-    const user = getCurrentUser();
-    let events = [];
-    
-    if (user && user.role === 'admin') {
-        // Tutors see all events
-        events = allEvents;
-    } else if (user) {
-        // Students/parents only see their own events
-        events = allEvents.filter(event => event.studentEmail === user.email);
-    }
-    
-    // Update month/year display
-    if (monthYear) {
-        const options = { year: 'numeric', month: 'long' };
-        monthYear.textContent = currentCalendarDate.toLocaleDateString('en-US', options);
-    }
-    
-    // Generate calendar grid
-    renderCalendarGrid(events, currentCalendarDate, allEvents);
-    
-    // Also update list view as fallback
-    if (calendarList) {
-        renderCalendarList(events, allEvents);
-    }
-}
-
-function renderCalendarGrid(events, date, allEvents) {
-    const calendarView = document.getElementById('calendarView');
-    if (!calendarView) return;
-    
-    const user = getCurrentUser();
-    const isAdmin = user && user.role === 'admin';
-    
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    
-    // Get first day of month and number of days
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-    
-    // Get previous month's days to fill the grid
-    const prevMonth = new Date(year, month, 0);
-    const daysInPrevMonth = prevMonth.getDate();
-    
-    // Day headers
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    let html = '<div class="calendar-header">';
-    dayNames.forEach(day => {
-        html += `<div class="calendar-day-header">${day}</div>`;
-    });
-    html += '</div><div class="calendar-grid">';
-    
-    // Previous month's trailing days
-    for (let i = startingDayOfWeek - 1; i >= 0; i--) {
-        const day = daysInPrevMonth - i;
-        html += `<div class="calendar-day other-month">
-            <div class="calendar-day-number">${day}</div>
-        </div>`;
-    }
-    
-    // Current month's days
-    const today = new Date();
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const isToday = today.getFullYear() === year && 
-                       today.getMonth() === month && 
-                       today.getDate() === day;
-        
-        // Get events for this day
-        const dayEvents = events.filter(e => e.date === dateStr);
-        
-        html += `<div class="calendar-day ${isToday ? 'today' : ''}">
-            <div class="calendar-day-number">${day}</div>`;
-        
-        dayEvents.forEach((event) => {
-            // Find original index in allEvents for deletion
-            const originalIndex = allEvents.findIndex(e => 
-                e.title === event.title && 
-                e.date === event.date && 
-                e.time === event.time &&
-                e.studentEmail === event.studentEmail
-            );
-            
-            const eventTime = event.time || 'All Day';
-            const deleteBtn = isAdmin ? 
-                `<button class="delete-event-btn" onclick="deleteEvent(${originalIndex}); return false;" title="Delete event">×</button>` : '';
-            
-            html += `<div class="calendar-event-item-wrapper">
-                <div class="calendar-event-item" 
-                     title="${event.title} - ${eventTime} (${event.duration} min)"
-                     onclick="showEventDetails('${event.title}', '${event.date}', '${event.time}', '${event.duration}', '${event.description || ''}', '${event.studentName || event.studentEmail || ''}')">
-                    ${event.title} - ${eventTime}
-                </div>
-                ${deleteBtn}
-            </div>`;
-        });
-        
-        html += '</div>';
-    }
-    
-    // Next month's leading days to complete the grid
-    const totalCells = startingDayOfWeek + daysInMonth;
-    const remainingCells = 42 - totalCells; // 6 rows * 7 days
-    for (let day = 1; day <= remainingCells && day <= 14; day++) {
-        html += `<div class="calendar-day other-month">
-            <div class="calendar-day-number">${day}</div>
-        </div>`;
-    }
-    
-    html += '</div>';
-    calendarView.innerHTML = html;
-    
-    // Add navigation handlers
-    const prevBtn = document.getElementById('prevMonth');
-    const nextBtn = document.getElementById('nextMonth');
-    
-    if (prevBtn) {
-        prevBtn.onclick = function() {
-            currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
-            loadCalendar();
-        };
-    }
-    
-    if (nextBtn) {
-        nextBtn.onclick = function() {
-            currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
-            loadCalendar();
-        };
-    }
-}
-
-function renderCalendarList(events, allEvents) {
-    const calendarList = document.getElementById('calendarList');
-    if (!calendarList) return;
-    
-    if (events.length === 0) {
-        calendarList.innerHTML = '<p class="empty-state">No upcoming sessions scheduled.</p>';
-        return;
-    }
-    
-    const user = getCurrentUser();
-    const isAdmin = user && user.role === 'admin';
-    
-    // Sort events by date
-    events.sort((a, b) => {
-        const dateA = new Date(a.date + 'T' + a.time);
-        const dateB = new Date(b.date + 'T' + b.time);
-        return dateA - dateB;
-    });
-    
-    calendarList.innerHTML = events.map((event) => {
-        // Find original index in allEvents for deletion
-        const originalIndex = allEvents.findIndex(e => 
-            e.title === event.title && 
-            e.date === event.date && 
-            e.time === event.time &&
-            e.studentEmail === event.studentEmail
-        );
-        
-        const deleteBtn = isAdmin ? 
-            `<button class="delete-btn" onclick="deleteEvent(${originalIndex})">Delete Event</button>` : '';
-        
-        const eventDate = new Date(event.date + 'T' + event.time);
-        const isPast = eventDate < new Date();
-        
-        const studentInfo = isAdmin && event.studentName ? 
-            `<span>Student: ${event.studentName}</span>` : '';
-        
-        return `
-            <div class="calendar-event" style="${isPast ? 'opacity: 0.7;' : ''}">
-                <h4>${event.title}</h4>
-                <div class="event-meta">
-                    <span>📅 ${new Date(event.date).toLocaleDateString()}</span>
-                    <span>🕐 ${event.time}</span>
-                    <span>⏱️ ${event.duration} minutes</span>
-                    ${studentInfo}
-                </div>
-                ${event.description ? `<div class="event-description">${event.description}</div>` : ''}
-                ${deleteBtn}
-            </div>
-        `;
-    }).join('');
-}
+// Calendar Management functions are now in dashboard.js
 
 window.showEventDetails = function(title, date, time, duration, description, studentName) {
     const dateStr = new Date(date).toLocaleDateString();
@@ -1116,22 +875,10 @@ window.showEventDetails = function(title, date, time, duration, description, stu
     alert(details);
 };
 
-window.deleteEvent = function(index) {
-    if (confirm('Are you sure you want to delete this event?')) {
-        const events = getStoredCalendar();
-        if (index >= 0 && index < events.length) {
-            events.splice(index, 1);
-            saveCalendar(events);
-            loadCalendar();
-            alert('Event deleted successfully!');
-        } else {
-            alert('Error: Event not found.');
-        }
-    }
-};
+// deleteEvent is now handled in dashboard.js with Supabase
 
-// Initialize tutor functionality
-function initTutorFunctions() {
+// Initialize tutor functionality - exported for use in dashboard
+export function initTutorFunctions() {
     // Set default date to today for calendar form
     const eventDateInput = document.getElementById('eventDate');
     if (eventDateInput) {
@@ -1142,7 +889,7 @@ function initTutorFunctions() {
     // Upload notes form
     const uploadNotesForm = document.getElementById('uploadNotesForm');
     if (uploadNotesForm) {
-        uploadNotesForm.addEventListener('submit', function(e) {
+        uploadNotesForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const studentEmail = document.getElementById('noteStudent').value;
@@ -1157,129 +904,197 @@ function initTutorFunctions() {
                 return;
             }
             
-            // Get student name
-            const approved = getApprovedUsers();
-            const student = approved.find(u => u.email === studentEmail);
-            const studentName = student ? student.name : studentEmail;
-            
-            // Handle file upload
-            if (file) {
-                // Check file size (limit to 5MB to avoid localStorage issues)
-                if (file.size > 5 * 1024 * 1024) {
-                    alert('File size must be less than 5MB. Please choose a smaller file.');
+            try {
+                // Get current user
+                const currentUser = await getCurrentUserFromSession();
+                if (!currentUser) {
+                    alert('You must be logged in to upload files.');
                     return;
                 }
+
+                const studentId = studentEmail; // studentEmail is actually studentId from dropdown
                 
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const fileDataUrl = e.target.result;
-                    
-                    // Validate that we got the file data
-                    if (!fileDataUrl || fileDataUrl.length === 0) {
-                        alert('Error: File data could not be read. Please try again.');
-                        return;
+                // Validate UUID format
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (!uuidRegex.test(studentId)) {
+                    alert('Invalid student selection. Please refresh and try again.');
+                    return;
+                }
+
+                // Get student profile for name
+                const { data: studentProfile } = await supabase
+                    .from('profiles')
+                    .select('display_name, user_id')
+                    .eq('user_id', studentId)
+                    .single();
+                
+                const studentName = studentProfile?.display_name || studentId;
+            
+                // Handle file upload
+                if (file) {
+                    // Check if it's a PDF - if so, upload to Supabase Storage
+                    if (file.type === 'application/pdf') {
+                        const tutorId = currentUser.id;
+
+                        // Check file size (limit to 10MB for PDFs)
+                        if (file.size > 10 * 1024 * 1024) {
+                            alert('PDF file size must be less than 10MB. Please choose a smaller file.');
+                            return;
+                        }
+
+                        // Show loading state
+                        const submitBtn = uploadNotesForm.querySelector('button[type="submit"]');
+                        const originalText = submitBtn.textContent;
+                        submitBtn.textContent = 'Uploading PDF...';
+                        submitBtn.disabled = true;
+
+                        try {
+                            // Upload PDF to Supabase Storage
+                            const { success, error: uploadError, material } = await uploadMaterial(file, studentId, tutorId, null);
+
+                            if (!success || uploadError) {
+                                alert(`Error uploading PDF: ${uploadError?.message || 'Unknown error'}`);
+                                submitBtn.textContent = originalText;
+                                submitBtn.disabled = false;
+                                return;
+                            }
+
+                            // Save note without file (file is now in Supabase Storage)
+                            const note = {
+                                studentEmail: studentId,
+                                studentName: studentName,
+                                title: title,
+                                subject: subject,
+                                content: content,
+                                date: new Date().toISOString(),
+                                file: null,
+                                tutorEmail: currentUser.email,
+                                materialId: material.id // Link to material in Supabase
+                            };
+                            
+                            const notes = getStoredNotes();
+                            notes.push(note);
+                            saveNotes(notes);
+
+                            // Note: Email notification skipped - we can't easily access student email from client-side
+                            // with RLS. To enable this, store email in profiles table or use a server-side function.
+                            
+                            alert(`Notes and PDF uploaded successfully for ${studentName}!`);
+                            uploadNotesForm.reset();
+                            loadStudentDropdown(); // Reset dropdown
+                            const { loadNotes, loadMaterials } = await import('./dashboard.js');
+                            await loadNotes();
+                            await loadMaterials();
+                            submitBtn.textContent = originalText;
+                            submitBtn.disabled = false;
+                        } catch (uploadError) {
+                            console.error('Error in PDF upload:', uploadError);
+                            const submitBtn = uploadNotesForm.querySelector('button[type="submit"]');
+                            submitBtn.textContent = 'Upload Notes';
+                            submitBtn.disabled = false;
+                            alert('Error uploading PDF. Please try again.');
+                        }
+                    } else {
+                        // Non-PDF files: use old localStorage method (for backward compatibility)
+                        // Check file size (limit to 5MB to avoid localStorage issues)
+                        if (file.size > 5 * 1024 * 1024) {
+                            alert('File size must be less than 5MB. Please choose a smaller file or use PDF format.');
+                            return;
+                        }
+                        
+                        const reader = new FileReader();
+                        reader.onload = async function(e) {
+                            const fileDataUrl = e.target.result;
+                            
+                            // Validate that we got the file data
+                            if (!fileDataUrl || fileDataUrl.length === 0) {
+                                alert('Error: File data could not be read. Please try again.');
+                                return;
+                            }
+                            
+                            const fileData = {
+                                name: file.name,
+                                type: file.type || 'application/octet-stream',
+                                size: file.size,
+                                data: fileDataUrl // Base64 encoded file (data URL format)
+                            };
+                            
+                            // Verify data URL format
+                            if (!fileDataUrl.startsWith('data:')) {
+                                console.warn('File data URL format unexpected:', fileDataUrl.substring(0, 50));
+                            }
+                            
+                            const note = {
+                                studentEmail: studentId,
+                                studentName: studentName,
+                                title: title,
+                                subject: subject,
+                                content: content,
+                                date: new Date().toISOString(),
+                                file: fileData,
+                                tutorEmail: currentUser.email // Track which tutor uploaded this note
+                            };
+                            
+                            const notes = getStoredNotes();
+                            notes.push(note);
+                            
+                            try {
+                                saveNotes(notes);
+                                
+                                // Note: Email notification skipped - we can't easily access student email from client-side
+                                // with RLS. To enable this, store email in profiles table or use a server-side function.
+                                
+                                alert(`Notes and file uploaded successfully for ${studentName}!`);
+                                uploadNotesForm.reset();
+                                loadStudentDropdown(); // Reset dropdown
+                                const { loadNotes } = await import('./dashboard.js');
+                                await loadNotes();
+                            } catch (error) {
+                                console.error('Error saving notes:', error);
+                                if (error.name === 'QuotaExceededError') {
+                                    alert('Error: File is too large or storage is full. Please try a smaller file.');
+                                } else {
+                                    alert('Error saving notes. Please try again.');
+                                }
+                            }
+                        };
+                        
+                        reader.onerror = function(error) {
+                            console.error('FileReader error:', error);
+                            alert('Error reading file. Please try again or choose a different file.');
+                        };
+                        
+                        reader.readAsDataURL(file);
                     }
-                    
-                    const fileData = {
-                        name: file.name,
-                        type: file.type || 'application/octet-stream',
-                        size: file.size,
-                        data: fileDataUrl // Base64 encoded file (data URL format)
-                    };
-                    
-                    // Verify data URL format
-                    if (!fileDataUrl.startsWith('data:')) {
-                        console.warn('File data URL format unexpected:', fileDataUrl.substring(0, 50));
-                    }
-                    
+                } else {
+                    // No file uploaded - save note only
                     const note = {
-                        studentEmail: studentEmail,
+                        studentEmail: studentId,
                         studentName: studentName,
                         title: title,
                         subject: subject,
                         content: content,
                         date: new Date().toISOString(),
-                        file: fileData
+                        file: null,
+                        tutorEmail: currentUser.email // Track which tutor uploaded this note
                     };
                     
                     const notes = getStoredNotes();
                     notes.push(note);
+                    saveNotes(notes);
                     
-                    try {
-                        saveNotes(notes);
-                        
-                        // Send email notification to student
-                        const emailSubject = `New Tutoring Notes: ${title}`;
-                        const emailMessage = `Hello ${studentName},\n\nNew tutoring notes have been uploaded for you!\n\n` +
-                            `Title: ${title}\n` +
-                            `Subject: ${subject}\n` +
-                            `Date: ${new Date().toLocaleDateString()}\n\n` +
-                            `Please log in to your dashboard to view the notes and download the attached file.\n\n` +
-                            `Best regards,\nStudySTEM Tutoring`;
-                        
-                        sendEmailNotification(studentEmail, studentName, emailSubject, emailMessage, 'notes')
-                            .then(sent => {
-                                if (sent) {
-                                    console.log('Email notification sent to student');
-                                }
-                            });
-                        
-                        alert(`Notes and file uploaded successfully for ${studentName}! An email notification has been sent.`);
-                        uploadNotesForm.reset();
-                        loadStudentDropdown(); // Reset dropdown
-                        loadNotes();
-                    } catch (error) {
-                        console.error('Error saving notes:', error);
-                        if (error.name === 'QuotaExceededError') {
-                            alert('Error: File is too large or storage is full. Please try a smaller file.');
-                        } else {
-                            alert('Error saving notes. Please try again.');
-                        }
-                    }
-                };
-                
-                reader.onerror = function(error) {
-                    console.error('FileReader error:', error);
-                    alert('Error reading file. Please try again or choose a different file.');
-                };
-                
-                reader.readAsDataURL(file);
-            } else {
-                // No file uploaded
-                const note = {
-                    studentEmail: studentEmail,
-                    studentName: studentName,
-                    title: title,
-                    subject: subject,
-                    content: content,
-                    date: new Date().toISOString(),
-                    file: null
-                };
-                
-                const notes = getStoredNotes();
-                notes.push(note);
-                saveNotes(notes);
-                
-                // Send email notification to student
-                const emailSubject = `New Tutoring Notes: ${title}`;
-                const emailMessage = `Hello ${studentName},\n\nNew tutoring notes have been uploaded for you!\n\n` +
-                    `Title: ${title}\n` +
-                    `Subject: ${subject}\n` +
-                    `Date: ${new Date().toLocaleDateString()}\n\n` +
-                    `Please log in to your dashboard to view the notes.\n\n` +
-                    `Best regards,\nStudySTEM Tutoring`;
-                
-                sendEmailNotification(studentEmail, studentName, emailSubject, emailMessage, 'notes')
-                    .then(sent => {
-                        if (sent) {
-                            console.log('Email notification sent to student');
-                        }
-                    });
-                
-                alert(`Notes uploaded successfully for ${studentName}! An email notification has been sent.`);
-                uploadNotesForm.reset();
-                loadStudentDropdown(); // Reset dropdown
-                loadNotes();
+                    // Note: Email notification skipped - we can't easily access student email from client-side
+                    // with RLS. To enable this, store email in profiles table or use a server-side function.
+                    
+                    alert(`Notes uploaded successfully for ${studentName}!`);
+                    uploadNotesForm.reset();
+                    loadStudentDropdown(); // Reset dropdown
+                    const { loadNotes } = await import('./dashboard.js');
+                    await loadNotes();
+                }
+            } catch (error) {
+                console.error('Error in upload process:', error);
+                alert('Error uploading. Please try again.');
             }
         });
     }
@@ -1287,7 +1102,7 @@ function initTutorFunctions() {
     // Calendar form
     const calendarForm = document.getElementById('calendarForm');
     if (calendarForm) {
-        calendarForm.addEventListener('submit', function(e) {
+        calendarForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const studentEmail = document.getElementById('eventStudent').value;
@@ -1302,61 +1117,76 @@ function initTutorFunctions() {
                 return;
             }
             
-            // Get student name
-            const approved = getApprovedUsers();
-            const student = approved.find(u => u.email === studentEmail);
-            const studentName = student ? student.name : studentEmail;
+            // studentEmail is now actually studentId (UUID) from the dropdown
+            const studentId = studentEmail;
             
-            const event = {
-                studentEmail: studentEmail,
-                studentName: studentName,
-                title: title,
-                date: date,
-                time: time,
-                duration: duration,
-                description: description || ''
-            };
-            
-            const events = getStoredCalendar();
-            events.push(event);
-            saveCalendar(events);
-            
-            // Send email notification to student
-            const eventDate = new Date(date);
-            const formattedDate = eventDate.toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            });
-            
-            const emailSubject = `New Tutoring Session Scheduled: ${title}`;
-            const emailMessage = `Hello ${studentName},\n\nA new tutoring session has been scheduled for you!\n\n` +
-                `Session Details:\n` +
-                `Title: ${title}\n` +
-                `Date: ${formattedDate}\n` +
-                `Time: ${time}\n` +
-                `Duration: ${duration} minutes\n` +
-                (description ? `Description: ${description}\n` : '') +
-                `\nPlease log in to your dashboard to view all your scheduled sessions.\n\n` +
-                `Best regards,\nStudySTEM Tutoring`;
-            
-            sendEmailNotification(studentEmail, studentName, emailSubject, emailMessage, 'calendar')
-                .then(sent => {
-                    if (sent) {
-                        console.log('Email notification sent to student');
-                    }
-                });
-            
-            alert(`Event added to calendar successfully for ${studentName}! An email notification has been sent.`);
-            calendarForm.reset();
-            // Reset date to today
-            if (eventDateInput) {
-                const today = new Date().toISOString().split('T')[0];
-                eventDateInput.value = today;
+            // Validate UUID format
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (!uuidRegex.test(studentId)) {
+                alert('Invalid student selection. Please refresh and try again.');
+                return;
             }
-            loadStudentDropdown(); // Reset dropdown
-            loadCalendar();
+            
+            // Get current tutor
+            getCurrentUserFromSession().then(async currentUser => {
+                if (!currentUser) {
+                    alert('You must be logged in to create events.');
+                    return;
+                }
+
+                const tutorId = currentUser.id;
+
+                // Get student profile for email notification
+                const { data: studentProfile } = await supabase
+                    .from('profiles')
+                    .select('display_name, user_id')
+                    .eq('user_id', studentId)
+                    .single();
+                
+                const studentName = studentProfile?.display_name || studentId;
+
+                // Calculate start_at and end_at from date, time, and duration
+                const startAt = new Date(`${date}T${time}`);
+                const endAt = new Date(startAt.getTime() + (parseInt(duration) * 60000));
+
+                // Insert event into Supabase
+                const { data: newEvent, error: insertError } = await supabase
+                    .from('events')
+                    .insert({
+                        tutor_id: tutorId,
+                        student_id: studentId,
+                        title: title,
+                        start_at: startAt.toISOString(),
+                        end_at: endAt.toISOString(),
+                        notes: description || null
+                    })
+                    .select()
+                    .single();
+
+                if (insertError) {
+                    console.error('Error creating event:', insertError);
+                    alert(`Error creating event: ${insertError.message}`);
+                    return;
+                }
+                
+                // Note: Email notification skipped - we can't easily access student email from client-side
+                // with RLS. To enable this, you'd need to either:
+                // 1. Store email in profiles table, or
+                // 2. Use a server-side function to send emails
+                
+                alert(`Event added to calendar successfully for ${studentName}!`);
+                calendarForm.reset();
+                // Reset date to today
+                if (eventDateInput) {
+                    const today = new Date().toISOString().split('T')[0];
+                    eventDateInput.value = today;
+                }
+                loadStudentDropdown(); // Reset dropdown
+                const { loadCalendar } = await import('./dashboard.js');
+                await loadCalendar();
+            }).catch(error => {
+                console.error('Error getting current user:', error);
+            });
         });
     }
 }
