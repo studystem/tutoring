@@ -462,7 +462,7 @@ export async function loadNotes() {
                                 <span>📅 ${pdfDate}</span>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-primary view-pdf-btn" data-path="${material.storage_path.replace(/"/g, '&quot;')}">
+                        <button type="button" class="btn btn-primary view-pdf-btn" data-path="${material.storage_path}">
                             View PDF
                         </button>
                     </div>
@@ -489,8 +489,8 @@ export async function loadNotes() {
 
 // Global event listener for View PDF buttons (event delegation)
 // Only register once using a guard
-if (!window.__pdfListenerBound) {
-    window.__pdfListenerBound = true;
+if (!window.__pdfClickBound) {
+    window.__pdfClickBound = true;
     
     document.addEventListener('click', async (e) => {
         const btn = e.target.closest('.view-pdf-btn');
@@ -509,6 +509,15 @@ if (!window.__pdfListenerBound) {
         btn.textContent = 'Loading...';
         btn.disabled = true;
         
+        // Open blank tab immediately to avoid popup blockers
+        const newTab = window.open('', '_blank', 'noopener');
+        if (!newTab) {
+            alert('Please allow popups to view PDFs.');
+            btn.textContent = originalText;
+            btn.disabled = false;
+            return;
+        }
+        
         try {
             const { supabase, MATERIALS_BUCKET } = await import('./supabaseClient.js');
             
@@ -520,17 +529,20 @@ if (!window.__pdfListenerBound) {
             
             if (error) {
                 console.error('Error creating signed URL:', error);
+                newTab.close();
                 alert('Could not open PDF: ' + error.message);
                 btn.textContent = originalText;
                 btn.disabled = false;
                 return;
             }
             
-            window.open(data.signedUrl, '_blank', 'noopener');
+            // Navigate the blank tab to the signed URL
+            newTab.location.href = data.signedUrl;
             btn.textContent = originalText;
             btn.disabled = false;
         } catch (error) {
-            console.error('Error in viewPdf handler:', error);
+            console.error('Error in PDF click handler:', error);
+            if (newTab) newTab.close();
             alert('Could not open PDF: ' + (error.message || 'Unknown error'));
             btn.textContent = originalText;
             btn.disabled = false;
@@ -1000,7 +1012,7 @@ export async function loadMaterials() {
                         <span>📄 ${fileSizeKB} KB</span>
                     </div>
                 </div>
-                <button type="button" class="btn btn-primary view-pdf-btn" data-path="${material.storage_path.replace(/"/g, '&quot;')}">
+                <button type="button" class="btn btn-primary view-pdf-btn" data-path="${material.storage_path}">
                     View PDF
                 </button>
             </div>
