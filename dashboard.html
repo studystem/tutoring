@@ -29,6 +29,11 @@
     <!-- Dashboard Section -->
     <section id="dashboard" class="dashboard">
         <div class="container">
+            <!-- Role Debug Badge -->
+            <div id="roleBadge" style="position: fixed; top: 80px; right: 20px; background: #6b46c1; color: white; padding: 8px 16px; border-radius: 8px; font-weight: bold; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                Role: loading...
+            </div>
+            
             <div class="dashboard-header">
                 <h2>My Dashboard</h2>
                 <button class="btn btn-secondary" id="logoutBtn">Log Out</button>
@@ -100,7 +105,7 @@
                         </div>
                         
                         <div class="admin-card">
-                            <h4>Update Calendar</h4>
+                            <h4>Create Session</h4>
                             <form id="calendarForm">
                                 <div class="form-group">
                                     <label for="eventStudent">Student</label>
@@ -244,11 +249,37 @@
                 return; // requireAuth already handles the redirect
             }
             
-            const user = await getCurrentUserFromSession();
-            if (!user) {
+            // Get session
+            const { getSession } = await import('./auth.js');
+            const { session } = await getSession();
+            
+            if (!session || !session.user) {
                 alert('Please log in to access the dashboard.');
                 window.location.href = 'index.html';
                 return;
+            }
+            
+            // Fetch role from public.profiles table (source of truth)
+            const { supabase } = await import('./supabaseClient.js');
+            let role = 'student';
+            try {
+                const { data: profile, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('user_id', session.user.id)
+                    .single();
+                
+                if (!profileError && profile) {
+                    role = profile.role || 'student';
+                }
+            } catch (error) {
+                console.error('Error fetching profile:', error);
+            }
+            
+            // Update role debug badge
+            const roleBadge = document.getElementById('roleBadge');
+            if (roleBadge) {
+                roleBadge.textContent = `Role: ${role}`;
             }
             
             // Update UI for logged in user
@@ -256,8 +287,9 @@
             const dashboard = document.getElementById('dashboard');
             const tutorPanel = document.getElementById('tutorPanel');
             
+            const user = await getCurrentUserFromSession();
             if (loginBtn) {
-                const displayName = user.name || `${user.userType.charAt(0).toUpperCase() + user.userType.slice(1)} Account`;
+                const displayName = user?.name || session.user.email?.split('@')[0] || 'User';
                 loginBtn.textContent = displayName;
                 loginBtn.style.background = '#e0e7ff';
                 loginBtn.onclick = function(e) {
@@ -272,18 +304,24 @@
                 dashboard.style.visibility = 'visible';
             }
             
-            // Show tutor panel if admin
-            const isTutor = user.role === 'admin' || user.userType === 'tutor';
-            if (isTutor && tutorPanel) {
-                tutorPanel.style.display = 'block';
-                tutorPanel.style.visibility = 'visible';
+            // Show tutor panel ONLY when role === 'tutor' (from profiles table)
+            if (role === 'tutor') {
+                if (tutorPanel) {
+                    tutorPanel.style.display = 'block';
+                    tutorPanel.style.visibility = 'visible';
+                }
+            } else {
+                if (tutorPanel) {
+                    tutorPanel.style.display = 'none';
+                    tutorPanel.style.visibility = 'hidden';
+                }
             }
             
             // Load notes and calendar
             setTimeout(async function() {
                 await loadNotes();
                 await loadCalendar();
-                if (isTutor) {
+                if (role === 'tutor') {
                     loadPendingAccounts();
                     loadStudentDropdown();
                     // Load event dropdowns (will be populated when student is selected)
