@@ -157,8 +157,8 @@ export async function loadEvents() {
 }
 
 /**
- * Fetch notes from Supabase
- * @returns {Promise<Array>} - Array of notes
+ * Fetch notes from Supabase with attached PDFs
+ * @returns {Promise<Array>} - Array of notes with materials
  */
 export async function getNotes() {
     try {
@@ -181,6 +181,7 @@ export async function getNotes() {
         const studentIds = [...new Set(notes.map(n => n.student_id))];
         const tutorIds = [...new Set(notes.map(n => n.tutor_id))];
         const eventIds = [...new Set(notes.map(n => n.event_id).filter(Boolean))];
+        const noteIds = notes.map(n => n.id);
 
         // Fetch profiles for students and tutors
         const { data: studentProfiles } = await supabase
@@ -203,17 +204,38 @@ export async function getNotes() {
             events = eventData || [];
         }
 
+        // Fetch materials (PDFs) attached to notes
+        const { data: materials, error: materialsError } = await supabase
+            .from('materials')
+            .select('*')
+            .in('note_id', noteIds)
+            .order('created_at', { ascending: false });
+
+        if (materialsError) {
+            console.error('Error fetching materials:', materialsError);
+        }
+
         // Create lookup maps
         const studentMap = new Map((studentProfiles || []).map(p => [p.user_id, p]));
         const tutorMap = new Map((tutorProfiles || []).map(p => [p.user_id, p]));
         const eventMap = new Map(events.map(e => [e.id, e]));
+        const materialsMap = new Map();
+        
+        // Group materials by note_id
+        (materials || []).forEach(material => {
+            if (!materialsMap.has(material.note_id)) {
+                materialsMap.set(material.note_id, []);
+            }
+            materialsMap.get(material.note_id).push(material);
+        });
 
-        // Enrich notes with profile and event data
+        // Enrich notes with profile, event, and materials data
         return notes.map(note => ({
             ...note,
             student: studentMap.get(note.student_id) ? { display_name: studentMap.get(note.student_id).display_name } : null,
             tutor: tutorMap.get(note.tutor_id) ? { display_name: tutorMap.get(note.tutor_id).display_name } : null,
-            event: note.event_id && eventMap.get(note.event_id) ? eventMap.get(note.event_id) : null
+            event: note.event_id && eventMap.get(note.event_id) ? eventMap.get(note.event_id) : null,
+            materials: materialsMap.get(note.id) || []
         }));
     } catch (error) {
         console.error('Error in getNotes:', error);
@@ -256,6 +278,114 @@ export async function createNote(studentId, title, content, eventId = null) {
         return { success: true, note: data };
     } catch (error) {
         console.error('Error in createNote:', error);
+        return { success: false, error };
+    }
+}
+
+/**
+ * Create a note with optional PDF upload
+ * @param {string} studentId - Student user ID
+ * @param {string} title - Note title
+ * @param {string} content - Note content
+ * @param {string|null} eventId - Optional event ID
+ * @param {File|null} pdfFile - Optional PDF file to upload
+ * @returns {Promise<{success: boolean, error?: Error, note?: object, material?: object}>}
+ */
+export async function createNoteWithOptionalPdf(studentId, title, content, eventId = null, pdfFile = null) {
+    try {
+        const user = await getCurrentUserFromSession();
+        if (!user || (user.role !== 'admin' && user.userType !== 'tutor')) {
+            return { success: false, error: new Error('Only tutors can create notes') };
+        }
+
+        const tutorId = user.id;
+
+        // Step 1: Insert note into public.notes
+        const { data: noteData, error: noteError } = await supabase
+            .from('notes')
+            .insert({
+                tutor_id: tutorId,
+                student_id: studentId,
+                event_id: eventId,
+                title: title,
+                content: content
+            })
+            .select()
+            .single();
+
+        if (noteError) {
+            console.error('Error creating note:', noteError);
+            return { success: false, error: noteError };
+        }
+
+        // Step 2: If PDF is provided, upload to Storage and insert into materials
+        let materialData = null;
+        if (pdfFile) {
+            // Validate file type
+            if (pdfFile.type !== 'application/pdf') {
+                // Delete the note if PDF validation fails
+                await supabase.from('notes').delete().eq('id', noteData.id);
+                return { success: false, error: new Error('Only PDF files are allowed') };
+            }
+
+            // Check file size (limit to 10MB)
+            if (pdfFile.size > 10 * 1024 * 1024) {
+                // Delete the note if file size validation fails
+                await supabase.from('notes').delete().eq('id', noteData.id);
+                return { success: false, error: new Error('PDF file size must be less than 10MB') };
+            }
+
+            // Generate unique file path
+            const fileExt = pdfFile.name.split('.').pop();
+            const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const filePath = `${studentId}/${fileName}`;
+
+            // Upload file to Supabase Storage
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from(MATERIALS_BUCKET)
+                .upload(filePath, pdfFile, {
+                    contentType: 'application/pdf',
+                    upsert: false
+                });
+
+            if (uploadError) {
+                console.error('Error uploading file:', uploadError);
+                // Delete the note if upload fails
+                await supabase.from('notes').delete().eq('id', noteData.id);
+                return { success: false, error: uploadError };
+            }
+
+            // Insert metadata into public.materials with note_id
+            const { data: material, error: materialError } = await supabase
+                .from('materials')
+                .insert({
+                    tutor_id: tutorId,
+                    student_id: studentId,
+                    event_id: eventId,
+                    note_id: noteData.id,
+                    storage_path: filePath,
+                    filename: pdfFile.name,
+                    size_bytes: pdfFile.size,
+                    mime_type: pdfFile.type
+                })
+                .select()
+                .single();
+
+            if (materialError) {
+                console.error('Error inserting material metadata:', materialError);
+                // Try to delete the uploaded file if metadata insert fails
+                await supabase.storage.from(MATERIALS_BUCKET).remove([filePath]);
+                // Delete the note if material insert fails
+                await supabase.from('notes').delete().eq('id', noteData.id);
+                return { success: false, error: materialError };
+            }
+
+            materialData = material;
+        }
+
+        return { success: true, note: noteData, material: materialData };
+    } catch (error) {
+        console.error('Error in createNoteWithOptionalPdf:', error);
         return { success: false, error };
     }
 }
@@ -314,6 +444,31 @@ export async function loadNotes() {
         const eventInfo = note.event ? 
             `<span>Event: ${note.event.title || 'Linked Event'}</span>` : '';
         
+        // Render attached PDFs
+        let pdfsHtml = '';
+        if (note.materials && note.materials.length > 0) {
+            pdfsHtml = '<div class="note-pdfs" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">';
+            pdfsHtml += '<strong>Attached PDFs:</strong>';
+            pdfsHtml += '<div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">';
+            note.materials.forEach(material => {
+                const pdfDate = new Date(material.created_at).toLocaleDateString();
+                const fileSizeKB = material.size_bytes ? (material.size_bytes / 1024).toFixed(2) : 'Unknown';
+                pdfsHtml += `
+                    <div class="material-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: #f9fafb; border-radius: 0.375rem;">
+                        <div>
+                            <span style="font-weight: 500;">${material.filename}</span>
+                            <span style="color: #6b7280; font-size: 0.875rem; margin-left: 0.5rem;">(${fileSizeKB} KB)</span>
+                            <span style="color: #6b7280; font-size: 0.875rem; margin-left: 0.5rem;">📅 ${pdfDate}</span>
+                        </div>
+                        <button class="btn btn-primary view-pdf-btn" style="padding: 0.25rem 0.75rem; font-size: 0.875rem;" data-path="${material.storage_path}" data-filename="${material.filename}">
+                            View PDF
+                        </button>
+                    </div>
+                `;
+            });
+            pdfsHtml += '</div></div>';
+        }
+        
         return `
             <div class="note-card">
                 <h4>${note.title}</h4>
@@ -323,10 +478,39 @@ export async function loadNotes() {
                     ${eventInfo}
                 </div>
                 <div class="note-content">${note.content}</div>
+                ${pdfsHtml}
                 ${deleteBtn}
             </div>
         `;
     }).join('');
+    
+    // Add click handlers for PDF view buttons
+    container.querySelectorAll('.view-pdf-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const storagePath = this.getAttribute('data-path');
+            const filename = this.getAttribute('data-filename');
+            
+            // Show loading state
+            const originalText = this.textContent;
+            this.textContent = 'Loading...';
+            this.disabled = true;
+
+            // Get signed URL and open in new tab
+            const { url, error } = await getMaterialSignedUrl(storagePath);
+            
+            if (error || !url) {
+                alert('Error loading PDF. Please try again.');
+                this.textContent = originalText;
+                this.disabled = false;
+                return;
+            }
+
+            // Open PDF in new tab
+            window.open(url, '_blank');
+            this.textContent = originalText;
+            this.disabled = false;
+        });
+    });
 }
 
 // Global function for deleting notes (called from onclick in HTML)

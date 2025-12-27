@@ -492,7 +492,7 @@ function initAuthModal() {
                     submitBtn.textContent = originalText;
                     submitBtn.disabled = false;
                     return;
-                    }
+                }
                 }
                 
                 // Fetch role from public.profiles table (source of truth)
@@ -854,9 +854,9 @@ export async function loadStudentDropdown() {
         const eventStudentSelect = document.getElementById('eventStudent');
         if (studentSelect) studentSelect.innerHTML = studentOptions;
         if (eventStudentSelect) eventStudentSelect.innerHTML = studentOptions;
-    }
-}
-
+            }
+        }
+        
 // Notes Management functions are now in dashboard.js
 
 // Make delete functions globally accessible
@@ -985,31 +985,55 @@ export function initTutorFunctions() {
         eventDateInput.setAttribute('min', today);
     }
     
-    // Create note form
-    const createNoteForm = document.getElementById('createNoteForm');
-    if (createNoteForm && !createNoteForm.dataset.bound) {
-        createNoteForm.dataset.bound = "true";
-        createNoteForm.addEventListener('submit', async function(e) {
+    // Unified create note with PDF form
+    const createNoteWithPdfForm = document.getElementById('createNoteWithPdfForm');
+    if (createNoteWithPdfForm && !createNoteWithPdfForm.dataset.bound) {
+        createNoteWithPdfForm.dataset.bound = "true";
+        createNoteWithPdfForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const studentId = document.getElementById('noteStudent').value;
             const eventId = document.getElementById('noteEvent').value || null;
             const title = document.getElementById('noteTitle').value;
             const content = document.getElementById('noteContent').value;
+            const fileInput = document.getElementById('notePdf');
+            const pdfFile = fileInput.files[0] || null;
             
             if (!studentId || !title || !content) {
                 alert('Please fill in all required fields, including selecting a student.');
                 return;
             }
             
-            const submitBtn = createNoteForm.querySelector('button[type="submit"]');
+            // Validate PDF if provided
+            if (pdfFile) {
+                if (pdfFile.type !== 'application/pdf') {
+                    alert('Only PDF files are allowed.');
+                    return;
+                }
+                
+                // Check file size (limit to 10MB)
+                if (pdfFile.size > 10 * 1024 * 1024) {
+                    alert('PDF file size must be less than 10MB. Please choose a smaller file.');
+                    return;
+                }
+            }
+            
+            const submitBtn = createNoteWithPdfForm.querySelector('button[type="submit"]');
             const originalText = submitBtn.textContent;
-            submitBtn.textContent = 'Creating note...';
+            submitBtn.textContent = pdfFile ? 'Creating note and uploading PDF...' : 'Creating note...';
             submitBtn.disabled = true;
             
             try {
-                const { createNote } = await import('./dashboard.js');
-                const { success, error, note } = await createNote(studentId, title, content, eventId);
+                const { createNoteWithOptionalPdf, getCurrentUserFromSession } = await import('./dashboard.js');
+                const currentUser = await getCurrentUserFromSession();
+                if (!currentUser) {
+                    alert('You must be logged in to create notes.');
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    return;
+                }
+                
+                const { success, error, note, material } = await createNoteWithOptionalPdf(studentId, title, content, eventId, pdfFile);
                 
                 if (!success || error) {
                     alert(`Error creating note: ${error?.message || 'Unknown error'}`);
@@ -1018,8 +1042,8 @@ export function initTutorFunctions() {
                     return;
                 }
                 
-                alert('Note created successfully!');
-                createNoteForm.reset();
+                alert(pdfFile ? 'Note created and PDF uploaded successfully!' : 'Note created successfully!');
+                createNoteWithPdfForm.reset();
                 const { loadNotes } = await import('./dashboard.js');
                 await loadNotes();
                 submitBtn.textContent = originalText;
@@ -1027,73 +1051,6 @@ export function initTutorFunctions() {
             } catch (error) {
                 console.error('Error in note creation:', error);
                 alert('Error creating note. Please try again.');
-                submitBtn.textContent = originalText;
-                submitBtn.disabled = false;
-            }
-        });
-    }
-    
-    // Upload material (PDF) form
-    const uploadMaterialForm = document.getElementById('uploadMaterialForm');
-    if (uploadMaterialForm && !uploadMaterialForm.dataset.bound) {
-        uploadMaterialForm.dataset.bound = "true";
-        uploadMaterialForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const studentId = document.getElementById('materialStudent').value;
-            const eventId = document.getElementById('materialEvent').value || null;
-            const fileInput = document.getElementById('materialFile');
-            const file = fileInput.files[0];
-            
-            if (!studentId || !file) {
-                alert('Please fill in all required fields, including selecting a student and PDF file.');
-                return;
-            }
-            
-            // Validate PDF
-            if (file.type !== 'application/pdf') {
-                alert('Only PDF files are allowed.');
-                return;
-            }
-            
-            // Check file size (limit to 10MB)
-            if (file.size > 10 * 1024 * 1024) {
-                alert('PDF file size must be less than 10MB. Please choose a smaller file.');
-        return;
-    }
-    
-            const submitBtn = uploadMaterialForm.querySelector('button[type="submit"]');
-            const originalText = submitBtn.textContent;
-            submitBtn.textContent = 'Uploading PDF...';
-            submitBtn.disabled = true;
-            
-            try {
-                const currentUser = await getCurrentUserFromSession();
-                if (!currentUser) {
-                    alert('You must be logged in to upload files.');
-                    submitBtn.textContent = originalText;
-                    submitBtn.disabled = false;
-                    return;
-                }
-                
-                const tutorId = currentUser.id;
-                const { uploadMaterial } = await import('./dashboard.js');
-                const { success, error: uploadError, material } = await uploadMaterial(file, studentId, tutorId, eventId);
-                
-                if (!success || uploadError) {
-                    alert(`Error uploading PDF: ${uploadError?.message || 'Unknown error'}`);
-                    submitBtn.textContent = originalText;
-                    submitBtn.disabled = false;
-                return;
-            }
-            
-                alert('PDF uploaded successfully!');
-                uploadMaterialForm.reset();
-                submitBtn.textContent = originalText;
-                submitBtn.disabled = false;
-            } catch (error) {
-                console.error('Error in material upload:', error);
-                alert('Error uploading PDF. Please try again.');
                 submitBtn.textContent = originalText;
                 submitBtn.disabled = false;
             }
@@ -1256,7 +1213,7 @@ export function initTutorFunctions() {
                         
                                 // Note: Email notification skipped - we can't easily access student email from client-side
                                 // with RLS. To enable this, store email in profiles table or use a server-side function.
-                                
+                        
                                 alert(`Notes and file uploaded successfully for ${studentName}!`);
                         uploadNotesForm.reset();
                         loadStudentDropdown(); // Reset dropdown
@@ -1298,7 +1255,7 @@ export function initTutorFunctions() {
                 
                     // Note: Email notification skipped - we can't easily access student email from client-side
                     // with RLS. To enable this, store email in profiles table or use a server-side function.
-                    
+                
                     alert(`Notes uploaded successfully for ${studentName}!`);
                 uploadNotesForm.reset();
                 loadStudentDropdown(); // Reset dropdown
@@ -1356,7 +1313,7 @@ export function initTutorFunctions() {
                     .select('display_name, user_id')
                     .eq('user_id', studentId)
                     .single();
-                
+            
                 const studentName = studentProfile?.display_name || studentId;
 
                 // Calculate start_at and end_at from date, time, and duration
@@ -1387,7 +1344,7 @@ export function initTutorFunctions() {
                 // with RLS. To enable this, you'd need to either:
                 // 1. Store email in profiles table, or
                 // 2. Use a server-side function to send emails
-                
+            
                 alert(`Event added to calendar successfully for ${studentName}!`);
             calendarForm.reset();
             // Reset date to today

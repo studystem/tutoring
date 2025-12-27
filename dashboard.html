@@ -54,8 +54,8 @@
                     
                     <div class="admin-grid">
                         <div class="admin-card">
-                            <h4>Create Note</h4>
-                            <form id="createNoteForm">
+                            <h4>Create Note with PDF</h4>
+                            <form id="createNoteWithPdfForm">
                                 <div class="form-group">
                                     <label for="noteStudent">Send to Student</label>
                                     <select id="noteStudent" required>
@@ -76,31 +76,12 @@
                                     <label for="noteContent">Note Content</label>
                                     <textarea id="noteContent" rows="8" placeholder="Enter the tutoring notes content here..." required></textarea>
                                 </div>
-                                <button type="submit" class="btn btn-primary">Create Note</button>
-                            </form>
-                        </div>
-                        
-                        <div class="admin-card">
-                            <h4>Upload PDF Material</h4>
-                            <form id="uploadMaterialForm">
                                 <div class="form-group">
-                                    <label for="materialStudent">Send to Student</label>
-                                    <select id="materialStudent" required>
-                                        <option value="">Select a student</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="materialEvent">Link to Event (optional)</label>
-                                    <select id="materialEvent">
-                                        <option value="">No event link</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="materialFile">Upload PDF</label>
-                                    <input type="file" id="materialFile" accept=".pdf" required>
+                                    <label for="notePdf">Upload PDF (optional)</label>
+                                    <input type="file" id="notePdf" accept="application/pdf">
                                     <small style="color: #6b7280; font-size: 0.85rem;">PDF files will be stored in Supabase Storage (max 10MB)</small>
                                 </div>
-                                <button type="submit" class="btn btn-primary">Upload PDF</button>
+                                <button type="submit" class="btn btn-primary">Create Note</button>
                             </form>
                         </div>
                         
@@ -236,125 +217,7 @@
         </div>
     </div>
 
-    <script type="module">
-        import { requireAuth, getCurrentUserFromSession, loadNotes, loadCalendar, getPendingUsers, getApprovedUsers } from './dashboard.js';
-        import { signOut } from './auth.js';
-        import { initTutorFunctions, loadPendingAccounts, loadStudentDropdown } from './script.js';
-        
-        // Dashboard-specific initialization
-        async function initDashboard() {
-            // Check if user is logged in, if not redirect to home
-            const isAuthenticated = await requireAuth();
-            if (!isAuthenticated) {
-                return; // requireAuth already handles the redirect
-            }
-            
-            // Get session
-            const { getSession } = await import('./auth.js');
-            const { session } = await getSession();
-            
-            if (!session || !session.user) {
-                alert('Please log in to access the dashboard.');
-                window.location.href = 'index.html';
-                return;
-            }
-            
-            // Fetch role from public.profiles table (source of truth)
-            const { supabase } = await import('./supabaseClient.js');
-            let role = 'student';
-            try {
-                const { data: profile, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('role')
-                    .eq('user_id', session.user.id)
-                    .single();
-                
-                if (!profileError && profile) {
-                    role = profile.role || 'student';
-                }
-            } catch (error) {
-                console.error('Error fetching profile:', error);
-            }
-            
-            // Update role debug badge
-            const roleBadge = document.getElementById('roleBadge');
-            if (roleBadge) {
-                roleBadge.textContent = `Role: ${role}`;
-            }
-            
-            // Update UI for logged in user
-            const loginBtn = document.getElementById('loginBtn');
-            const dashboard = document.getElementById('dashboard');
-            const tutorPanel = document.getElementById('tutorPanel');
-            
-            const user = await getCurrentUserFromSession();
-            if (loginBtn) {
-                const displayName = user?.name || session.user.email?.split('@')[0] || 'User';
-                loginBtn.textContent = displayName;
-                loginBtn.style.background = '#e0e7ff';
-                loginBtn.onclick = function(e) {
-                    e.preventDefault();
-                    window.location.href = 'dashboard.html';
-                };
-            }
-            
-            // Show dashboard
-            if (dashboard) {
-                dashboard.style.display = 'block';
-                dashboard.style.visibility = 'visible';
-            }
-            
-            // Show tutor panel ONLY when role === 'tutor' (from profiles table)
-            if (role === 'tutor') {
-                if (tutorPanel) {
-                    tutorPanel.style.display = 'block';
-                    tutorPanel.style.visibility = 'visible';
-                }
-            } else {
-                if (tutorPanel) {
-                    tutorPanel.style.display = 'none';
-                    tutorPanel.style.visibility = 'hidden';
-                }
-            }
-            
-            // Load notes and calendar
-            setTimeout(async function() {
-                await loadNotes();
-                await loadCalendar();
-                if (role === 'tutor') {
-                    loadPendingAccounts();
-                    loadStudentDropdown();
-                    // Load event dropdowns (will be populated when student is selected)
-                    const { loadEventDropdown } = await import('./dashboard.js');
-                    await loadEventDropdown('noteEvent');
-                    await loadEventDropdown('materialEvent');
-                }
-            }, 100);
-            
-            // Initialize tutor functions
-            initTutorFunctions();
-            
-            // Initialize logout button
-            const logoutBtn = document.getElementById('logoutBtn');
-            if (logoutBtn) {
-                logoutBtn.addEventListener('click', async function() {
-                    if (confirm('Are you sure you want to log out?')) {
-                        await signOut();
-                        alert('You have been logged out successfully.');
-                        window.location.href = 'index.html';
-                    }
-                });
-            }
-        }
-        
-        // Start initialization when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initDashboard);
-        } else {
-            // DOM already loaded
-            initDashboard();
-        }
-    </script>
+    <script type="module" src="dashboardPage.js"></script>
 </body>
 </html>
 
