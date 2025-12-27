@@ -1,11 +1,10 @@
 import { getSession } from './auth.js';
-import { supabase } from './supabaseClient.js';
+import { supabase, MATERIALS_BUCKET } from './supabaseClient.js';
 
 // Storage keys for local data (keeping existing localStorage structure)
 const NOTES_STORAGE_KEY = 'studystem_notes';
 const PENDING_USERS_KEY = 'studystem_pending_users';
 const APPROVED_USERS_KEY = 'studystem_approved_users';
-const MATERIALS_BUCKET = 'materials';
 
 /**
  * Session guard - redirects to index.html if user is not logged in
