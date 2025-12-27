@@ -496,26 +496,25 @@ function initAuthModal() {
                     }
                 }
                 
-                // Get user metadata
-                const userMetadata = supabaseUser.user_metadata || {};
-                const user = {
-                    id: supabaseUser.id,
-                    name: userMetadata.name || supabaseUser.email?.split('@')[0] || 'User',
-                    email: supabaseUser.email,
-                    userType: userMetadata.userType || 'student',
-                    role: userMetadata.role || 'user'
-                };
-                
-                // Check if user is approved (for non-tutor accounts)
-                if (user.role !== 'admin' && user.userType !== 'tutor') {
-                    if (!isUserApproved(user.email)) {
-                        await signOut(); // Sign out if not approved
-                        alert('Your account is pending verification. Please wait for the tutor to approve your account. You will be notified once approved.');
+                // Get user info from session (includes profile role)
+                const user = await getCurrentUserFromSession();
+                if (!user) {
+                    alert('Error retrieving user information. Please try again.');
                     submitBtn.textContent = originalText;
                     submitBtn.disabled = false;
                     return;
                 }
-            }
+                
+                // Check if user is approved (only for non-tutor accounts)
+                if (user.role !== 'tutor' && user.userType !== 'tutor' && user.role !== 'admin') {
+                    if (!isUserApproved(user.email)) {
+                        await signOut(); // Sign out if not approved
+                        alert('Your account is pending verification. Please wait for the tutor to approve your account. You will be notified once approved.');
+                        submitBtn.textContent = originalText;
+                        submitBtn.disabled = false;
+                        return;
+                    }
+                }
             
                 modal.style.display = 'none';
                 document.body.style.overflow = 'auto';
@@ -526,7 +525,7 @@ function initAuthModal() {
                 // Update UI
                 await updateUIForLoggedInUser(user);
                 
-                const welcomeMsg = user.role === 'admin' || user.userType === 'tutor'
+                const welcomeMsg = user.role === 'tutor' || user.userType === 'tutor' || user.role === 'admin'
                     ? `Welcome back, ${user.name}! You have tutor admin access. Redirecting to dashboard...`
                     : `Welcome back, ${user.name}! Redirecting to dashboard...`;
                 alert(welcomeMsg);
@@ -583,11 +582,15 @@ function initAuthModal() {
             submitBtn.disabled = true;
             
             try {
+                // Determine role based on userType
+                const isTutor = userType === 'tutor';
+                const role = isTutor ? 'tutor' : 'user';
+                
                 // Create Supabase account
                 const { user: supabaseUser, error } = await signUp(email, password, {
                     name: name,
                     userType: userType,
-                    role: 'user'
+                    role: role
                 });
                 
                 if (error) {
@@ -597,7 +600,60 @@ function initAuthModal() {
                     return;
                 }
                 
-                // Create pending account in local storage for approval workflow
+                // If tutor, update profile role to 'tutor' and skip approval
+                if (isTutor && supabaseUser?.id) {
+                    // Try to update profile role (retry a few times in case profile doesn't exist yet)
+                    let profileUpdated = false;
+                    for (let attempt = 0; attempt < 3; attempt++) {
+                        try {
+                            const { error: updateError } = await supabase
+                                .from('profiles')
+                                .update({ role: 'tutor' })
+                                .eq('user_id', supabaseUser.id);
+                            
+                            if (!updateError) {
+                                profileUpdated = true;
+                                break;
+                            }
+                            
+                            // If profile doesn't exist yet, wait a bit and retry
+                            if (attempt < 2) {
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                            } else {
+                                console.error('Error updating tutor profile after retries:', updateError);
+                            }
+                        } catch (updateErr) {
+                            console.error('Error updating tutor profile:', updateErr);
+                            if (attempt < 2) {
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                            }
+                        }
+                    }
+                    
+                    // Continue even if profile update failed - metadata has the role
+                    
+                    // Tutors don't need approval - log them in immediately
+                    modal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                    signupFormElement.reset();
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                    
+                    alert(`Tutor account created successfully! Welcome, ${name}!`);
+                    
+                    // Update UI for logged in user
+                    const user = {
+                        id: supabaseUser.id,
+                        name: name,
+                        email: email,
+                        userType: 'tutor',
+                        role: 'tutor'
+                    };
+                    await updateUIForLoggedInUser(user);
+                    return;
+                }
+                
+                // For non-tutors, create pending account for approval workflow
                 const pendingUser = {
                     name: name,
                     email: email,
@@ -716,35 +772,35 @@ export async function loadStudentDropdown() {
         if (error) {
             console.error('Error loading students:', error);
             // Fallback to approved users from localStorage
-            const approved = getApprovedUsers();
+    const approved = getApprovedUsers();
             const localStudents = approved.filter(u => u.userType === 'student');
             const studentOptions = '<option value="">Select a student</option>' +
                 localStudents.map(student => 
                     `<option value="${student.email}">${student.name} (${student.email})</option>`
                 ).join('');
             
-            const studentSelect = document.getElementById('noteStudent');
-            const eventStudentSelect = document.getElementById('eventStudent');
+    const studentSelect = document.getElementById('noteStudent');
+    const eventStudentSelect = document.getElementById('eventStudent');
             if (studentSelect) studentSelect.innerHTML = studentOptions;
             if (eventStudentSelect) eventStudentSelect.innerHTML = studentOptions;
             return;
         }
-
-        const studentOptions = '<option value="">Select a student</option>' +
+    
+    const studentOptions = '<option value="">Select a student</option>' +
             (students || []).map(student => 
                 `<option value="${student.user_id}">${student.display_name || student.user_id}</option>`
-            ).join('');
+        ).join('');
 
         const studentSelect = document.getElementById('noteStudent');
         const eventStudentSelect = document.getElementById('eventStudent');
-        
-        if (studentSelect) {
-            studentSelect.innerHTML = studentOptions;
-        }
-        
-        if (eventStudentSelect) {
-            eventStudentSelect.innerHTML = studentOptions;
-        }
+    
+    if (studentSelect) {
+        studentSelect.innerHTML = studentOptions;
+    }
+    
+    if (eventStudentSelect) {
+        eventStudentSelect.innerHTML = studentOptions;
+    }
     } catch (error) {
         console.error('Error in loadStudentDropdown:', error);
         // Fallback to localStorage
@@ -930,8 +986,8 @@ export function initTutorFunctions() {
                 
                 const studentName = studentProfile?.display_name || studentId;
             
-                // Handle file upload
-                if (file) {
+            // Handle file upload
+            if (file) {
                     // Check if it's a PDF - if so, upload to Supabase Storage
                     if (file.type === 'application/pdf') {
                         const tutorId = currentUser.id;
@@ -996,99 +1052,99 @@ export function initTutorFunctions() {
                         }
                     } else {
                         // Non-PDF files: use old localStorage method (for backward compatibility)
-                        // Check file size (limit to 5MB to avoid localStorage issues)
-                        if (file.size > 5 * 1024 * 1024) {
+                // Check file size (limit to 5MB to avoid localStorage issues)
+                if (file.size > 5 * 1024 * 1024) {
                             alert('File size must be less than 5MB. Please choose a smaller file or use PDF format.');
-                            return;
-                        }
-                        
-                        const reader = new FileReader();
+                    return;
+                }
+                
+                const reader = new FileReader();
                         reader.onload = async function(e) {
-                            const fileDataUrl = e.target.result;
-                            
-                            // Validate that we got the file data
-                            if (!fileDataUrl || fileDataUrl.length === 0) {
-                                alert('Error: File data could not be read. Please try again.');
-                                return;
-                            }
-                            
-                            const fileData = {
-                                name: file.name,
-                                type: file.type || 'application/octet-stream',
-                                size: file.size,
-                                data: fileDataUrl // Base64 encoded file (data URL format)
-                            };
-                            
-                            // Verify data URL format
-                            if (!fileDataUrl.startsWith('data:')) {
-                                console.warn('File data URL format unexpected:', fileDataUrl.substring(0, 50));
-                            }
-                            
-                            const note = {
-                                studentEmail: studentId,
-                                studentName: studentName,
-                                title: title,
-                                subject: subject,
-                                content: content,
-                                date: new Date().toISOString(),
-                                file: fileData,
-                                tutorEmail: currentUser.email // Track which tutor uploaded this note
-                            };
-                            
-                            const notes = getStoredNotes();
-                            notes.push(note);
-                            
-                            try {
-                                saveNotes(notes);
-                                
-                                // Note: Email notification skipped - we can't easily access student email from client-side
-                                // with RLS. To enable this, store email in profiles table or use a server-side function.
-                                
-                                alert(`Notes and file uploaded successfully for ${studentName}!`);
-                                uploadNotesForm.reset();
-                                loadStudentDropdown(); // Reset dropdown
-                                const { loadNotes } = await import('./dashboard.js');
-                                await loadNotes();
-                            } catch (error) {
-                                console.error('Error saving notes:', error);
-                                if (error.name === 'QuotaExceededError') {
-                                    alert('Error: File is too large or storage is full. Please try a smaller file.');
-                                } else {
-                                    alert('Error saving notes. Please try again.');
-                                }
-                            }
-                        };
-                        
-                        reader.onerror = function(error) {
-                            console.error('FileReader error:', error);
-                            alert('Error reading file. Please try again or choose a different file.');
-                        };
-                        
-                        reader.readAsDataURL(file);
+                    const fileDataUrl = e.target.result;
+                    
+                    // Validate that we got the file data
+                    if (!fileDataUrl || fileDataUrl.length === 0) {
+                        alert('Error: File data could not be read. Please try again.');
+                        return;
                     }
-                } else {
-                    // No file uploaded - save note only
+                    
+                    const fileData = {
+                        name: file.name,
+                        type: file.type || 'application/octet-stream',
+                        size: file.size,
+                        data: fileDataUrl // Base64 encoded file (data URL format)
+                    };
+                    
+                    // Verify data URL format
+                    if (!fileDataUrl.startsWith('data:')) {
+                        console.warn('File data URL format unexpected:', fileDataUrl.substring(0, 50));
+                    }
+                    
                     const note = {
-                        studentEmail: studentId,
+                                studentEmail: studentId,
                         studentName: studentName,
                         title: title,
                         subject: subject,
                         content: content,
                         date: new Date().toISOString(),
-                        file: null,
-                        tutorEmail: currentUser.email // Track which tutor uploaded this note
+                        file: fileData,
+                                tutorEmail: currentUser.email // Track which tutor uploaded this note
                     };
                     
                     const notes = getStoredNotes();
                     notes.push(note);
-                    saveNotes(notes);
                     
+                    try {
+                        saveNotes(notes);
+                        
+                                // Note: Email notification skipped - we can't easily access student email from client-side
+                                // with RLS. To enable this, store email in profiles table or use a server-side function.
+                                
+                                alert(`Notes and file uploaded successfully for ${studentName}!`);
+                        uploadNotesForm.reset();
+                        loadStudentDropdown(); // Reset dropdown
+                                const { loadNotes } = await import('./dashboard.js');
+                                await loadNotes();
+                    } catch (error) {
+                        console.error('Error saving notes:', error);
+                        if (error.name === 'QuotaExceededError') {
+                            alert('Error: File is too large or storage is full. Please try a smaller file.');
+                        } else {
+                            alert('Error saving notes. Please try again.');
+                        }
+                    }
+                };
+                
+                reader.onerror = function(error) {
+                    console.error('FileReader error:', error);
+                    alert('Error reading file. Please try again or choose a different file.');
+                };
+                
+                reader.readAsDataURL(file);
+                    }
+            } else {
+                    // No file uploaded - save note only
+                const note = {
+                        studentEmail: studentId,
+                    studentName: studentName,
+                    title: title,
+                    subject: subject,
+                    content: content,
+                    date: new Date().toISOString(),
+                    file: null,
+                        tutorEmail: currentUser.email // Track which tutor uploaded this note
+                };
+                
+                const notes = getStoredNotes();
+                notes.push(note);
+                saveNotes(notes);
+                
                     // Note: Email notification skipped - we can't easily access student email from client-side
                     // with RLS. To enable this, store email in profiles table or use a server-side function.
                     
                     alert(`Notes uploaded successfully for ${studentName}!`);
-                    uploadNotesForm.reset();
-                    loadStudentDropdown(); // Reset dropdown
+                uploadNotesForm.reset();
+                loadStudentDropdown(); // Reset dropdown
                     const { loadNotes } = await import('./dashboard.js');
                     await loadNotes();
                 }
@@ -1175,13 +1231,13 @@ export function initTutorFunctions() {
                 // 2. Use a server-side function to send emails
                 
                 alert(`Event added to calendar successfully for ${studentName}!`);
-                calendarForm.reset();
-                // Reset date to today
-                if (eventDateInput) {
-                    const today = new Date().toISOString().split('T')[0];
-                    eventDateInput.value = today;
-                }
-                loadStudentDropdown(); // Reset dropdown
+            calendarForm.reset();
+            // Reset date to today
+            if (eventDateInput) {
+                const today = new Date().toISOString().split('T')[0];
+                eventDateInput.value = today;
+            }
+            loadStudentDropdown(); // Reset dropdown
                 const { loadCalendar } = await import('./dashboard.js');
                 await loadCalendar();
             }).catch(error => {

@@ -110,14 +110,34 @@ export async function getCurrentUserFromSession() {
     try {
         const { session } = await getSession();
         if (session && session.user) {
+            // First try to get role from profiles table (more accurate)
+            let profileRole = null;
+            try {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role, display_name')
+                    .eq('user_id', session.user.id)
+                    .single();
+                
+                if (profile) {
+                    profileRole = profile.role;
+                }
+            } catch (profileError) {
+                // Profile might not exist yet, use metadata fallback
+                console.log('Profile not found, using metadata:', profileError);
+            }
+            
             // Extract user info from session
             const userData = session.user.user_metadata || {};
+            const role = profileRole || userData.role || 'student';
+            const userType = role === 'tutor' ? 'tutor' : (userData.userType || 'student');
+            
             return {
                 id: session.user.id,
                 email: session.user.email,
                 name: userData.name || session.user.email?.split('@')[0] || 'User',
-                userType: userData.userType || 'student',
-                role: userData.role || 'user'
+                userType: userType,
+                role: role
             };
         }
         return null;
