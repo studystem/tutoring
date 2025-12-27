@@ -462,7 +462,7 @@ export async function loadNotes() {
                                 <span>📅 ${pdfDate}</span>
                             </div>
                         </div>
-                        <button class="btn btn-primary view-pdf-btn" data-path="${material.storage_path}" data-filename="${material.filename}">
+                        <button class="btn btn-primary view-pdf-btn" onclick="viewPdf(${JSON.stringify(material.storage_path)})">
                             View PDF
                         </button>
                     </div>
@@ -485,35 +485,32 @@ export async function loadNotes() {
             </div>
         `;
     }).join('');
-    
-    // Add click handlers for PDF view buttons
-    container.querySelectorAll('.view-pdf-btn').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            const storagePath = this.getAttribute('data-path');
-            const filename = this.getAttribute('data-filename');
-            
-            // Show loading state
-            const originalText = this.textContent;
-            this.textContent = 'Loading...';
-            this.disabled = true;
-
-            // Get signed URL and open in new tab
-            const { url, error } = await getMaterialSignedUrl(storagePath);
-            
-            if (error || !url) {
-                alert('Error loading PDF. Please try again.');
-                this.textContent = originalText;
-                this.disabled = false;
-                return;
-            }
-
-            // Open PDF in new tab
-            window.open(url, '_blank');
-            this.textContent = originalText;
-            this.disabled = false;
-        });
-    });
 }
+
+/**
+ * Global function to view PDF by storage path
+ * @param {string} storagePath - The storage path of the PDF file
+ */
+window.viewPdf = async function(storagePath) {
+    try {
+        const { supabase, MATERIALS_BUCKET } = await import('./supabaseClient.js');
+        
+        const { data, error } = await supabase.storage
+            .from(MATERIALS_BUCKET)
+            .createSignedUrl(storagePath, 3600);
+        
+        if (error) {
+            console.error('Error creating signed URL:', error);
+            alert(`Error loading PDF: ${error.message}`);
+            return;
+        }
+        
+        window.open(data.signedUrl, '_blank', 'noopener');
+    } catch (error) {
+        console.error('Error in viewPdf:', error);
+        alert(`Error loading PDF: ${error.message || 'Unknown error'}`);
+    }
+};
 
 // Global function for deleting notes (called from onclick in HTML)
 window.deleteNoteById = async function(noteId) {
