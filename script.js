@@ -488,7 +488,7 @@ function initAuthModal() {
                     submitBtn.textContent = originalText;
                     submitBtn.disabled = false;
                     return;
-                    } else {
+            } else {
                         alert('Invalid email or password. Please try again.');
                     submitBtn.textContent = originalText;
                     submitBtn.disabled = false;
@@ -496,26 +496,49 @@ function initAuthModal() {
                     }
                 }
                 
-                // Get user info from session (includes profile role)
-                const user = await getCurrentUserFromSession();
-                if (!user) {
-                    alert('Error retrieving user information. Please try again.');
-                    submitBtn.textContent = originalText;
-                    submitBtn.disabled = false;
-                    return;
+                // Fetch role from public.profiles table (source of truth)
+                let role = 'student';
+                let profileError = null;
+                try {
+                    const { data: profile, error: profileErr } = await supabase
+                        .from('profiles')
+                        .select('role, display_name')
+                        .eq('user_id', supabaseUser.id)
+                        .single();
+                    
+                    if (profileErr) {
+                        profileError = profileErr;
+                        console.log('LOGIN ROLE', role, profileError);
+                    } else if (profile) {
+                        role = profile.role || 'student';
+                        console.log('LOGIN ROLE', role, profileError);
+                    }
+                } catch (err) {
+                    profileError = err;
+                    console.log('LOGIN ROLE', role, profileError);
                 }
                 
-                // Check if user is approved (only for non-tutor accounts)
-                if (user.role !== 'tutor' && user.userType !== 'tutor' && user.role !== 'admin') {
-                    if (!isUserApproved(user.email)) {
-                        await signOut(); // Sign out if not approved
-                        alert('Your account is pending verification. Please wait for the tutor to approve your account. You will be notified once approved.');
-                        submitBtn.textContent = originalText;
-                        submitBtn.disabled = false;
-                        return;
-                    }
+                // Build user object using profiles.role as source of truth
+                const userMetadata = supabaseUser.user_metadata || {};
+                let userType, userRole;
+                
+                if (role === 'tutor') {
+                    userType = 'tutor';
+                    userRole = 'admin';
+                } else {
+                    userType = 'student';
+                    userRole = 'user';
                 }
-            
+                
+                const user = {
+                    id: supabaseUser.id,
+                    name: userMetadata.name || supabaseUser.email?.split('@')[0] || 'User',
+                    email: supabaseUser.email,
+                    userType: userType,
+                    role: userRole
+                };
+                
+                // Never block login - always allow successful Supabase sign-in
                 modal.style.display = 'none';
                 document.body.style.overflow = 'auto';
                 loginFormElement.reset();
@@ -525,12 +548,12 @@ function initAuthModal() {
                 // Update UI
                 await updateUIForLoggedInUser(user);
                 
-                const welcomeMsg = user.role === 'tutor' || user.userType === 'tutor' || user.role === 'admin'
+                const welcomeMsg = user.role === 'admin' || user.userType === 'tutor'
                     ? `Welcome back, ${user.name}! You have tutor admin access. Redirecting to dashboard...`
                     : `Welcome back, ${user.name}! Redirecting to dashboard...`;
                 alert(welcomeMsg);
                 
-                // Redirect to dashboard page
+                // Always redirect to dashboard on successful login
                 window.location.href = 'dashboard.html';
             } catch (error) {
                 console.error('Login error:', error);
