@@ -231,81 +231,15 @@ async function updateUIForLoggedInUser(user) {
     const tutorPanel = document.getElementById('tutorPanel');
     const navMenu = document.querySelector('.nav-menu');
     
-    // Setup login button to toggle dropdown
-    const userDropdown = document.getElementById('userDropdown');
-    const changeNameLink = document.getElementById('changeNameLink');
-    const logoutLink = document.getElementById('logoutLink');
-    
     if (loginBtn) {
         const displayName = user.name || `${user.userType.charAt(0).toUpperCase() + user.userType.slice(1)} Account`;
         loginBtn.textContent = displayName;
         loginBtn.style.background = '#e0e7ff';
         loginBtn.onclick = function(e) {
             e.preventDefault();
-            e.stopPropagation();
-            if (userDropdown) {
-                const isVisible = userDropdown.style.display !== 'none';
-                userDropdown.style.display = isVisible ? 'none' : 'block';
-            }
+            // Redirect to dashboard page
+            window.location.href = 'dashboard.html';
         };
-    }
-    
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
-        if (userDropdown && !e.target.closest('.user-menu-container')) {
-            userDropdown.style.display = 'none';
-        }
-    });
-    
-    // Change Name handler
-    if (changeNameLink) {
-        changeNameLink.addEventListener('click', async function(e) {
-            e.preventDefault();
-            if (userDropdown) userDropdown.style.display = 'none';
-            
-            const { supabase } = await import('./supabaseClient.js');
-            const { getSession } = await import('./auth.js');
-            const { session } = await getSession();
-            if (!session || !session.user) return;
-            
-            const currentName = user.name || session.user.email?.split('@')[0] || 'User';
-            const newName = prompt('Enter your new display name:', currentName);
-            if (newName && newName.trim() && newName.trim() !== currentName) {
-                try {
-                    const { error: updateError } = await supabase
-                        .from('profiles')
-                        .update({ display_name: newName.trim() })
-                        .eq('user_id', session.user.id);
-                    
-                    if (updateError) {
-                        console.error('Error updating display name:', updateError);
-                        alert('Error updating name: ' + updateError.message);
-                    } else {
-                        if (loginBtn) loginBtn.textContent = newName.trim();
-                        alert('Name updated successfully!');
-                        // Reload to refresh user data
-                        window.location.reload();
-                    }
-                } catch (error) {
-                    console.error('Error in change name:', error);
-                    alert('Error updating name. Please try again.');
-                }
-            }
-        });
-    }
-    
-    // Logout handler
-    if (logoutLink) {
-        logoutLink.addEventListener('click', async function(e) {
-            e.preventDefault();
-            if (userDropdown) userDropdown.style.display = 'none';
-            const { signOut } = await import('./auth.js');
-            if (confirm('Are you sure you want to log out?')) {
-                await signOut();
-                alert('You have been logged out successfully.');
-                window.location.href = 'index.html';
-            }
-        });
     }
     
     // Show dashboard link in navigation - simple approach, just show/hide
@@ -397,6 +331,7 @@ async function updateUIForLoggedInUser(user) {
                 await loadNotes();
                 await loadCalendar();
         if (isTutor) {
+            loadPendingAccounts();
             loadStudentDropdown();
         }
     }, 100);

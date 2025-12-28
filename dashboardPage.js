@@ -55,96 +55,16 @@ if (window.__dashboardInitDone) {
             const loginBtn = document.getElementById('loginBtn');
             const dashboard = document.getElementById('dashboard');
             const tutorPanel = document.getElementById('tutorPanel');
-            const dashboardNavItem = document.getElementById('dashboardNavItem');
-            const userDropdown = document.getElementById('userDropdown');
-            const changeNameLink = document.getElementById('changeNameLink');
-            const logoutLink = document.getElementById('logoutLink');
-            
-            // Fetch display_name from profiles table
-            const { supabase } = await import('./supabaseClient.js');
-            let displayName = session.user.email?.split('@')[0] || 'User';
-            try {
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('display_name')
-                    .eq('user_id', session.user.id)
-                    .single();
-                if (profile?.display_name) {
-                    displayName = profile.display_name;
-                }
-            } catch (error) {
-                console.error('Error fetching display name:', error);
-            }
             
             const user = await getCurrentUserFromSession();
-            
-            // Show Dashboard link
-            if (dashboardNavItem) {
-                dashboardNavItem.style.display = 'list-item';
-            }
-            
-            // Setup login button to toggle dropdown
             if (loginBtn) {
+                const displayName = user?.name || session.user.email?.split('@')[0] || 'User';
                 loginBtn.textContent = displayName;
                 loginBtn.style.background = '#e0e7ff';
                 loginBtn.onclick = function(e) {
                     e.preventDefault();
-                    e.stopPropagation();
-                    if (userDropdown) {
-                        const isVisible = userDropdown.style.display !== 'none';
-                        userDropdown.style.display = isVisible ? 'none' : 'block';
-                    }
+                    window.location.href = 'dashboard.html';
                 };
-            }
-            
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function(e) {
-                if (userDropdown && !e.target.closest('.user-menu-container')) {
-                    userDropdown.style.display = 'none';
-                }
-            });
-            
-            // Change Name handler
-            if (changeNameLink) {
-                changeNameLink.addEventListener('click', async function(e) {
-                    e.preventDefault();
-                    if (userDropdown) userDropdown.style.display = 'none';
-                    
-                    const newName = prompt('Enter your new display name:', displayName);
-                    if (newName && newName.trim() && newName.trim() !== displayName) {
-                        try {
-                            const { error: updateError } = await supabase
-                                .from('profiles')
-                                .update({ display_name: newName.trim() })
-                                .eq('user_id', session.user.id);
-                            
-                            if (updateError) {
-                                console.error('Error updating display name:', updateError);
-                                alert('Error updating name: ' + updateError.message);
-                            } else {
-                                displayName = newName.trim();
-                                if (loginBtn) loginBtn.textContent = displayName;
-                                alert('Name updated successfully!');
-                            }
-                        } catch (error) {
-                            console.error('Error in change name:', error);
-                            alert('Error updating name. Please try again.');
-                        }
-                    }
-                });
-            }
-            
-            // Logout handler
-            if (logoutLink) {
-                logoutLink.addEventListener('click', async function(e) {
-                    e.preventDefault();
-                    if (userDropdown) userDropdown.style.display = 'none';
-                    if (confirm('Are you sure you want to log out?')) {
-                        await signOut();
-                        alert('You have been logged out successfully.');
-                        window.location.href = 'index.html';
-                    }
-                });
             }
             
             // Show dashboard
@@ -176,6 +96,7 @@ if (window.__dashboardInitDone) {
                 if (role === 'tutor') {
                     // Load tutor-specific dropdowns and data
                     const scriptModule = await import('./script.js');
+                    scriptModule.loadPendingAccounts();
                     scriptModule.loadStudentDropdown();
                     // Event dropdowns are populated when student is selected via loadStudentDropdown
                 }

@@ -42,22 +42,6 @@ export function getStoredNotes() {
 }
 
 /**
- * Format time as 12-hour with AM/PM
- * @param {Date|string} dateTime - Date object or ISO string
- * @returns {string} - Formatted time (e.g., "2:30 PM")
- */
-function formatTime12Hour(dateTime) {
-    const date = typeof dateTime === 'string' ? new Date(dateTime) : dateTime;
-    let hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
-    const minutesStr = minutes < 10 ? '0' + minutes : minutes;
-    return `${hours}:${minutesStr} ${ampm}`;
-}
-
-/**
  * Get calendar events from Supabase
  * @returns {Promise<Array>} - Array of calendar events
  */
@@ -73,29 +57,6 @@ export async function getStoredCalendar() {
             return [];
         }
 
-        if (!data || data.length === 0) {
-            return [];
-        }
-
-        // Get unique student and tutor IDs
-        const studentIds = [...new Set(data.map(e => e.student_id))];
-        const tutorIds = [...new Set(data.map(e => e.tutor_id))];
-
-        // Fetch profiles for students and tutors
-        const { data: studentProfiles } = await supabase
-            .from('profiles')
-            .select('user_id, display_name')
-            .in('user_id', studentIds);
-
-        const { data: tutorProfiles } = await supabase
-            .from('profiles')
-            .select('user_id, display_name')
-            .in('user_id', tutorIds);
-
-        // Create lookup maps
-        const studentMap = new Map((studentProfiles || []).map(p => [p.user_id, p]));
-        const tutorMap = new Map((tutorProfiles || []).map(p => [p.user_id, p]));
-
         // Transform Supabase events to the format expected by the UI
         return (data || []).map(event => {
             const startDate = new Date(event.start_at);
@@ -103,20 +64,15 @@ export async function getStoredCalendar() {
             const durationMs = endDate - startDate;
             const durationMinutes = Math.round(durationMs / 60000);
 
-            const studentProfile = studentMap.get(event.student_id);
-            const tutorProfile = tutorMap.get(event.tutor_id);
-
             return {
                 id: event.id,
                 title: event.title,
                 date: startDate.toISOString().split('T')[0],
-                time: formatTime12Hour(startDate),
+                time: startDate.toTimeString().slice(0, 5),
                 duration: durationMinutes,
                 description: event.notes || '',
                 tutorId: event.tutor_id,
                 studentId: event.student_id,
-                studentName: studentProfile?.display_name || null,
-                tutorName: tutorProfile?.display_name || null,
                 startAt: event.start_at,
                 endAt: event.end_at
             };
@@ -153,9 +109,8 @@ export async function getCurrentUserFromSession() {
     try {
         const { session } = await getSession();
         if (session && session.user) {
-            // First try to get role and display_name from profiles table (more accurate)
+            // First try to get role from profiles table (more accurate)
             let profileRole = null;
-            let displayName = null;
             try {
                 const { data: profile } = await supabase
                     .from('profiles')
@@ -165,7 +120,6 @@ export async function getCurrentUserFromSession() {
                 
                 if (profile) {
                     profileRole = profile.role;
-                    displayName = profile.display_name;
                 }
             } catch (profileError) {
                 // Profile might not exist yet, use metadata fallback
@@ -180,7 +134,7 @@ export async function getCurrentUserFromSession() {
             return {
                 id: session.user.id,
                 email: session.user.email,
-                name: displayName || userData.name || session.user.email?.split('@')[0] || 'User',
+                name: userData.name || session.user.email?.split('@')[0] || 'User',
                 userType: userType,
                 role: role
             };
@@ -763,14 +717,13 @@ function renderCalendarGrid(events, date, allEvents, user) {
         
         dayEvents.forEach((event) => {
             const eventTime = event.time || 'All Day';
-            const studentNameForDetails = event.studentName || '';
             const deleteBtn = isAdmin ? 
                 `<button class="delete-event-btn" onclick="window.deleteEvent('${event.id}'); return false;" title="Delete event">×</button>` : '';
             
             html += `<div class="calendar-event-item-wrapper">
                 <div class="calendar-event-item" 
                      title="${event.title} - ${eventTime} (${event.duration} min)"
-                     onclick="window.showEventDetails('${event.title}', '${event.date}', '${event.time}', '${event.duration}', '${event.description || ''}', '${studentNameForDetails}')">
+                     onclick="window.showEventDetails('${event.title}', '${event.date}', '${event.time}', '${event.duration}', '${event.description || ''}', '')">
                     ${event.title} - ${eventTime}
                 </div>
                 ${deleteBtn}
@@ -825,10 +778,10 @@ function renderCalendarList(events, allEvents, user) {
     
     const isAdmin = user && (user.role === 'admin' || user.userType === 'tutor');
     
-    // Sort events by date (use startAt ISO timestamp for accurate sorting)
+    // Sort events by date
     events.sort((a, b) => {
-        const dateA = new Date(a.startAt);
-        const dateB = new Date(b.startAt);
+        const dateA = new Date(a.date + 'T' + a.time);
+        const dateB = new Date(b.date + 'T' + b.time);
         return dateA - dateB;
     });
     
@@ -836,7 +789,7 @@ function renderCalendarList(events, allEvents, user) {
         const deleteBtn = isAdmin ? 
             `<button class="delete-btn" onclick="window.deleteEvent('${event.id}')">Delete Event</button>` : '';
         
-        const eventDate = new Date(event.startAt);
+        const eventDate = new Date(event.date + 'T' + event.time);
         const isPast = eventDate < new Date();
         
         return `
@@ -930,9 +883,6 @@ window.downloadNoteFile = function(noteIndex) {
 window.showEventDetails = function(title, date, time, duration, description, studentName) {
     const dateStr = new Date(date).toLocaleDateString();
     let details = `Event: ${title}\nDate: ${dateStr}\nTime: ${time}\nDuration: ${duration} minutes`;
-    if (studentName) {
-        details += `\nStudent: ${studentName}`;
-    }
     if (description) {
         details += `\n\nDescription: ${description}`;
     }
