@@ -21,7 +21,14 @@
                 <li><a href="index.html#tutors">Tutors</a></li>
                 <li><a href="index.html#subjects">Subjects</a></li>
                 <li><a href="index.html#contact">Contact</a></li>
-                <li><button class="btn-login" id="loginBtn">Log In / Sign Up</button></li>
+                <li id="dashboardNavItem" style="display: none;"><a href="dashboard.html" id="dashboardNavLink">Dashboard</a></li>
+                <li class="user-menu-container">
+                    <button class="btn-login" id="loginBtn">Log In / Sign Up</button>
+                    <div class="user-dropdown" id="userDropdown" style="display: none;">
+                        <a href="#" id="changeNameLink">Change Name</a>
+                        <a href="#" id="logoutLink">Logout</a>
+                    </div>
+                </li>
             </ul>
         </div>
     </nav>
@@ -43,14 +50,6 @@
                 <!-- Tutor Admin Panel (only for tutors) -->
                 <div id="tutorPanel" class="tutor-panel" style="display: none;">
                     <h3>Tutor Admin Panel</h3>
-                    
-                    <!-- Account Verification Section -->
-                    <div class="admin-section">
-                        <h4>Pending Account Verifications</h4>
-                        <div id="pendingAccountsContainer" class="pending-accounts-container">
-                            <p class="empty-state">No pending account verifications.</p>
-                        </div>
-                    </div>
                     
                     <div class="admin-grid">
                         <div class="admin-card">

@@ -22,7 +22,13 @@
                 <li><a href="#subjects">Subjects</a></li>
                 <li><a href="#contact">Contact</a></li>
                 <li id="dashboardNavItem" style="display: none;"><a href="dashboard.html" id="dashboardNavLink">Dashboard</a></li>
-                <li><button class="btn-login" id="loginBtn">Log In / Sign Up</button></li>
+                <li class="user-menu-container">
+                    <button class="btn-login" id="loginBtn">Log In / Sign Up</button>
+                    <div class="user-dropdown" id="userDropdown" style="display: none;">
+                        <a href="#" id="changeNameLink">Change Name</a>
+                        <a href="#" id="logoutLink">Logout</a>
+                    </div>
+                </li>
             </ul>
         </div>
     </nav>
