@@ -465,6 +465,9 @@ export async function loadNotes() {
                         <button type="button" class="btn btn-primary view-pdf-btn" data-path="${material.storage_path}">
                             View PDF
                         </button>
+                        <button type="button" class="btn btn-secondary view-pdf-new-tab-btn" data-path="${material.storage_path}" style="margin-left: 0.5rem;">
+                            Open in new tab
+                        </button>
                     </div>
                 `;
             });
@@ -492,6 +495,7 @@ export async function loadNotes() {
 if (!window.__pdfClickBound) {
     window.__pdfClickBound = true;
     
+    // Handle "View PDF" button - opens in same tab
     document.addEventListener('click', async (e) => {
         const btn = e.target.closest('.view-pdf-btn');
         if (!btn) return;
@@ -509,10 +513,55 @@ if (!window.__pdfClickBound) {
         btn.textContent = 'Loading...';
         btn.disabled = true;
         
+        try {
+            const { supabase, MATERIALS_BUCKET } = await import('./supabaseClient.js');
+            
+            const { data, error } = await supabase.storage
+                .from(MATERIALS_BUCKET)
+                .createSignedUrl(path, 3600);
+            
+            console.log('Signed URL:', { data, error });
+            
+            if (error) {
+                console.error('Error creating signed URL:', error);
+                alert('Could not open PDF: ' + error.message);
+                btn.textContent = originalText;
+                btn.disabled = false;
+                return;
+            }
+            
+            // Navigate same tab to the signed URL
+            window.location.href = data.signedUrl;
+        } catch (error) {
+            console.error('Error in PDF click handler:', error);
+            alert('Could not open PDF: ' + (error.message || 'Unknown error'));
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    });
+    
+    // Handle "Open in new tab" button - popup-blocker-proof
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.view-pdf-new-tab-btn');
+        if (!btn) return;
+        
+        const path = btn.dataset.path;
+        if (!path) {
+            console.error('Open in new tab button missing data-path attribute');
+            return;
+        }
+        
+        console.log('Open in new tab clicked path:', path);
+        
+        // Show loading state
+        const originalText = btn.textContent;
+        btn.textContent = 'Opening...';
+        btn.disabled = true;
+        
         // Open blank tab immediately to avoid popup blockers
-        const newTab = window.open('', '_blank', 'noopener');
-        if (!newTab) {
-            alert('Please allow popups to view PDFs.');
+        const tab = window.open('about:blank', '_blank');
+        if (!tab) {
+            alert('Please allow popups to open PDFs in a new tab.');
             btn.textContent = originalText;
             btn.disabled = false;
             return;
@@ -529,7 +578,7 @@ if (!window.__pdfClickBound) {
             
             if (error) {
                 console.error('Error creating signed URL:', error);
-                newTab.close();
+                tab.close();
                 alert('Could not open PDF: ' + error.message);
                 btn.textContent = originalText;
                 btn.disabled = false;
@@ -537,12 +586,12 @@ if (!window.__pdfClickBound) {
             }
             
             // Navigate the blank tab to the signed URL
-            newTab.location.href = data.signedUrl;
+            tab.location.href = data.signedUrl;
             btn.textContent = originalText;
             btn.disabled = false;
         } catch (error) {
-            console.error('Error in PDF click handler:', error);
-            if (newTab) newTab.close();
+            console.error('Error in new tab PDF handler:', error);
+            if (tab) tab.close();
             alert('Could not open PDF: ' + (error.message || 'Unknown error'));
             btn.textContent = originalText;
             btn.disabled = false;
@@ -1014,6 +1063,9 @@ export async function loadMaterials() {
                 </div>
                 <button type="button" class="btn btn-primary view-pdf-btn" data-path="${material.storage_path}">
                     View PDF
+                </button>
+                <button type="button" class="btn btn-secondary view-pdf-new-tab-btn" data-path="${material.storage_path}" style="margin-left: 0.5rem;">
+                    Open in new tab
                 </button>
             </div>
         `;
